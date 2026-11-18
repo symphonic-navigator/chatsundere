@@ -35,11 +35,6 @@ export class McpProxySessionError extends Error {
   }
 }
 
-/**
- * The MCP server (or, through the proxy, its upstream) answered with a redirect. MCP
- * requests never follow one, so the user is told to enter the final link instead; the
- * redirect's target is never read.
- */
 /** A non-OK HTTP answer to an MCP request; `status` lets callers tell "nothing here" apart. */
 export class McpHttpError extends Error {
   constructor(
@@ -51,6 +46,11 @@ export class McpHttpError extends Error {
   }
 }
 
+/**
+ * The MCP server (or, through the proxy, its upstream) answered with a redirect. MCP
+ * requests never follow one, so the user is told to enter the final link instead; the
+ * redirect's target is never read.
+ */
 export class McpRedirectError extends Error {
   constructor() {
     super(MCP_REDIRECT_DETAIL);

@@ -316,10 +316,12 @@ describe('emphasisSplit', () => {
 
 describe('review fixes (T1 review, 2026-11-18)', () => {
   it('strips a long run of trailing punctuation in linear time', () => {
-    const text = `https://a.example/${')'.repeat(100_000)}x`;
+    // The link ends in the run, so the strip loop walks all of it; a quadratic strip
+    // takes tens of seconds on 100k characters, so a generous budget still catches it.
+    const text = `https://a.example/mcp${')'.repeat(100_000)}`;
     const started = performance.now();
-    userWroteLink('https://a.example/mcp', [text]);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(linksInText(text)).toEqual(['https://a.example/mcp']);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it.each([

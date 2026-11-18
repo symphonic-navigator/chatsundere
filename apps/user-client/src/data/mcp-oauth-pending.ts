@@ -18,7 +18,8 @@ export type PendingSignInSummary = {
   createdAt: number;
 };
 
-const LIFETIME_MS = 10 * 60_000;
+/** How long a pending sign-in lives: 10 minutes. */
+export const PENDING_SIGN_IN_LIFETIME_MS = 10 * 60_000;
 
 /** This device's unfinished sign-ins younger than 10 minutes, newest first. */
 export async function listPendingSignIns(
@@ -28,7 +29,7 @@ export async function listPendingSignIns(
   if (key === null) return [];
   try {
     const rows = (await getClientDataDb().mcpOAuthPending.toArray())
-      .filter((r) => r.completedAt === undefined && now - r.createdAt < LIFETIME_MS)
+      .filter((r) => r.completedAt === undefined && now - r.createdAt < PENDING_SIGN_IN_LIFETIME_MS)
       .sort((a, b) => b.createdAt - a.createdAt);
     const out: PendingSignInSummary[] = [];
     for (const row of rows) {

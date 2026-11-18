@@ -5,6 +5,7 @@ import {
   type ConnectorLinkRefusal,
   normaliseConnectorLink,
   userWroteLink,
+  userWroteRawLink,
 } from './connector-link.js';
 import type { Tool, ToolResult } from './types.js';
 
@@ -70,8 +71,14 @@ export function contributeConnectorTool(ctx: ConnectorToolContext): Tool {
     async execute(args): Promise<ToolResult> {
       calls++;
       if (calls > MAX_CALLS) return refuse(CONNECTOR_CAP);
-      const link = normaliseConnectorLink(typeof args.url === 'string' ? args.url : '');
-      if (!link.ok) return refuse(CONNECTOR_REFUSALS[link.reason]);
+      const raw = typeof args.url === 'string' ? args.url : '';
+      const link = normaliseConnectorLink(raw);
+      // A refusal names the link's host on a card, so only for a link the user wrote:
+      // an injected `http://evil.example` gets no card at all (spec §2.4, §6.1).
+      if (!link.ok) {
+        if (!userWroteRawLink(raw, ctx.userTexts())) return refuse(CONNECTOR_NOT_USERS);
+        return refuse(CONNECTOR_REFUSALS[link.reason]);
+      }
       if (!userWroteLink(link.url, ctx.userTexts())) return refuse(CONNECTOR_NOT_USERS);
       // One card per reply: a second successful call would show a second one.
       if (succeeded) return refuse(CONNECTOR_CAP);

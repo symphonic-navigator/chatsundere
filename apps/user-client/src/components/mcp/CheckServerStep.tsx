@@ -178,7 +178,13 @@ export function CheckServerStep(props: {
           <FailureMessage
             failure={failure}
             linked={linked}
-            onLink={() => navigate(withReturn('/app/account/server-linking', props.returnTo))}
+            onLink={() =>
+              // With a return, the side trip takes the place of *Add server*, so its ‹
+              // reaches the chat rather than an emptied check (whole-branch review S-A).
+              navigate(withReturn('/app/account/server-linking', props.returnTo), {
+                replace: Boolean(props.returnTo),
+              })
+            }
           />
           <Button tone="neutral" className="self-start" onClick={() => void onCheck()}>
             Try again

@@ -323,7 +323,12 @@ function AddServer({
                 seed: { url: phase.check.endpoint, authScheme: 'bearer', ...proposalSeed() },
               })
             }
-            onOpenExisting={(id) => navigate(withReturn(`/app/integrations/${id}`, returnTo))}
+            onOpenExisting={(id) =>
+              // As *Link a server*: with a return, ‹ there reaches the chat (review S-A).
+              navigate(withReturn(`/app/integrations/${id}`, returnTo), {
+                replace: Boolean(returnTo),
+              })
+            }
           />
         ) : null}
         {phase.kind === 'flow' ? (
@@ -615,7 +620,8 @@ function IntegrationServerForm({
           durationMs: 6_000,
         });
       }
-      // Save leaves the way ‹ does, or to the chat it came from; Remove goes up to the list.
+      // Save leaves the way ‹ does, or to the chat it came from; Remove goes to that chat
+      // too, else up to the list.
       if (returnTo) nav.returnTo(returnTo);
       else nav.back(INTEGRATIONS_LIST);
     } catch (e) {

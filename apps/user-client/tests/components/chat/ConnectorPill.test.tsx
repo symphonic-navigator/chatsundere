@@ -6,10 +6,10 @@ import type { McpServerRow, PillRow } from '../../../src/boot/client-data-db.js'
 import { ConnectorPill } from '../../../src/components/chat/ConnectorPill.js';
 import { Pill } from '../../../src/components/chat/Pill.js';
 import type { PendingSignInSummary } from '../../../src/data/mcp-oauth-pending.js';
-import { CONNECTOR_CAP } from '../../../src/tools/add-mcp-connector.js';
+import { CONNECTOR_CAP, CONNECTOR_NOT_USERS } from '../../../src/tools/add-mcp-connector.js';
 
 const m = vi.hoisted(() => ({
-  servers: [] as Partial<McpServerRow>[],
+  servers: [] as Partial<McpServerRow>[] | undefined,
   pending: [] as PendingSignInSummary[],
   personaIds: [] as (string | null)[],
   persona: { id: 'per1', name: 'Mira', mcpOverrides: {} as Record<string, 'on' | 'off'> } as {
@@ -23,7 +23,8 @@ const m = vi.hoisted(() => ({
 vi.mock('../../../src/data/mcp-servers.js', () => ({
   useMcpServers: () => ({ data: m.servers }),
 }));
-vi.mock('../../../src/data/mcp-oauth-pending.js', () => ({
+vi.mock('../../../src/data/mcp-oauth-pending.js', async (orig) => ({
+  ...(await orig<typeof import('../../../src/data/mcp-oauth-pending.js')>()),
   usePendingSignIns: () => ({ data: m.pending }),
 }));
 vi.mock('../../../src/data/chats.js', () => ({
@@ -225,6 +226,47 @@ describe('ConnectorPill — Needs your passphrase', () => {
     expect(within(group).getByRole('button', { name: 'Not now' })).toBeInTheDocument();
     fireEvent.click(within(group).getByRole('link', { name: 'Enter passphrase' }));
     expect(where()).toBe(`/login?return=${RETURN}&need=passphrase`);
+  });
+
+  it('describes the disabled Check & add by its state line', () => {
+    useSessionStore.setState({ mk: null } as never);
+    renderCard(proposed());
+    const button = within(card()).getByRole('button', { name: 'Check & add ↗' });
+    expect(button).toHaveAccessibleDescription(
+      'Chatsundere needs your passphrase once more before it can add a server.',
+    );
+  });
+});
+
+describe('ConnectorPill — before the servers have loaded', () => {
+  it('holds Check & add until the servers query has loaded', () => {
+    m.servers = undefined;
+    renderCard(proposed());
+    expect(within(card()).getByRole('button', { name: 'Check & add ↗' })).toBeDisabled();
+    expect(within(card()).getByRole('button', { name: 'Not now' })).toBeEnabled();
+  });
+
+  it('holds Add anyway until the servers query has loaded', () => {
+    m.servers = undefined;
+    renderCard(proposed({ connectorDismissedAt: 3 }));
+    expect(within(card()).getByRole('button', { name: 'Add anyway ↗' })).toBeDisabled();
+  });
+
+  it('releases Check & add once the servers have loaded', () => {
+    m.servers = undefined;
+    const { rerender } = renderCard(proposed());
+    m.servers = [];
+    rerender(
+      <MemoryRouter initialEntries={['/app/chat/elsewhere']}>
+        <Routes>
+          <Route
+            path="/app/chat/:chatId"
+            element={<ConnectorPill row={proposed()} chatId="chat 1/x" personaId="per1" />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(within(card()).getByRole('button', { name: 'Check & add ↗' })).toBeEnabled();
   });
 });
 
@@ -481,6 +523,17 @@ describe('ConnectorPill — Failed', () => {
   it("shows nothing for a refusal whose link passes the rules (cap, not the user's)", () => {
     const { container } = renderCard(refused(LINK));
     expect(container.querySelector('[role="group"]')).toBeNull();
+  });
+
+  it.each([
+    'http://evil.example/mcp',
+    'https://nas.local/mcp',
+    'https://user:pw@evil.example/mcp',
+    'https://evil.example/mcp#x',
+  ])('shows nothing for a link the user never wrote, even when it breaks the rules (%s)', (raw) => {
+    const { container } = renderCard(refused(raw, CONNECTOR_NOT_USERS));
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 
   it('shows nothing for a capped call, even when its link breaks the rules', () => {

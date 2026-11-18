@@ -140,9 +140,18 @@ vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { MemoryRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
+import { NavTrailTracker } from '../../src/components/NavTrailTracker.js';
+import { useAppNav } from '../../src/lib/use-app-nav.js';
 import type { OAuthDiscovery } from '../../src/mcp/oauth/discovery.js';
 import { IntegrationServerPage } from '../../src/routes/app/integrations/server.js';
 import { PendingSignInPage } from '../../src/routes/app/integrations/sign-in.js';
@@ -1697,6 +1706,128 @@ describe('the way back to the chat (spec §5.5)', () => {
       }
       fireEvent.click(await screen.findByRole('button', { name: 'Open My Kumbu' }));
       await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+    });
+
+    describe('Back from a side trip reaches the chat (whole-branch review S-A)', () => {
+      /** The chat behind *Add server*, tapped into as the card does, with the real trail. */
+      function wrapFromChat(search: string) {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        function ChatStandIn() {
+          const navigate = useNavigate();
+          return (
+            <div>
+              <div>chat page</div>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(`/app/integrations/new${search}`, { state: search ? PROPOSED : null })
+                }
+              >
+                tap the card
+              </button>
+            </div>
+          );
+        }
+        function ServerLinkingWithBack() {
+          const nav = useAppNav();
+          return (
+            <div>
+              <div>server linking</div>
+              <button type="button" onClick={() => nav.back('/app/account')}>
+                linking back
+              </button>
+            </div>
+          );
+        }
+        render(
+          <QueryClientProvider client={qc}>
+            <MemoryRouter initialEntries={[CHAT]}>
+              <NavTrailTracker />
+              <Routes>
+                <Route path="/app/integrations/new" element={<IntegrationServerPage />} />
+                <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
+                <Route path="/app/integrations" element={<div>integrations list</div>} />
+                <Route path="/app/account/server-linking" element={<ServerLinkingWithBack />} />
+                <Route path="/app/chat/:chatId" element={<ChatStandIn />} />
+              </Routes>
+              <PathProbe />
+            </MemoryRouter>
+          </QueryClientProvider>,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'tap the card' }));
+      }
+
+      function localOnly() {
+        gates.proxy = false;
+        gates.link = 'local-only';
+        checkServerMock.mockResolvedValue({
+          kind: 'unreachable',
+          directOnly: true,
+          error: 'x',
+          cause: 'probe',
+        });
+      }
+
+      it('‹ on server linking from Link a server goes to the chat', async () => {
+        localOnly();
+        wrapFromChat(RETURN);
+        fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+        expect(await screen.findByText('server linking')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'linking back' }));
+        expect(await screen.findByText('chat page')).toBeTruthy();
+        expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      });
+
+      it('‹ on server linking without a return goes back to Add server, as today', async () => {
+        localOnly();
+        wrapFromChat('');
+        fireEvent.change(screen.getByLabelText('Server link'), {
+          target: { value: 'https://kumbu.example/mcp' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
+        expect(await screen.findByText('server linking')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'linking back' }));
+        await waitFor(() =>
+          expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new'),
+        );
+      });
+
+      it.each([
+        ['with a return, to the chat', RETURN, CHAT],
+        ['without one, back to Add server as today', '', '/app/integrations/new'],
+      ])(
+        '‹ on an existing connection opened from the check goes %s',
+        async (_l, search, target) => {
+          useMcpServersMock.mockReturnValue({
+            data: [
+              {
+                ...ROW,
+                id: 'oauth-1',
+                name: 'My Kumbu',
+                auth: { scheme: 'oauth' },
+                url: 'https://kumbu.example/mcp',
+              },
+            ],
+          });
+          checkServerMock.mockResolvedValue(SIGN_IN);
+          wrapFromChat(search);
+          if (!search) {
+            fireEvent.change(screen.getByLabelText('Server link'), {
+              target: { value: 'https://kumbu.example/mcp' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+          }
+          fireEvent.click(await screen.findByRole('button', { name: 'Open My Kumbu' }));
+          await waitFor(() =>
+            expect(screen.getByTestId('path').textContent).toBe(
+              `/app/integrations/oauth-1${search}`,
+            ),
+          );
+          fireEvent.click(backButton());
+          await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
+        },
+      );
     });
 
     it('Use a key instead keeps the return for Back', async () => {

@@ -16,8 +16,8 @@ export type ConnectorLinkResult =
 
 const MAX_LINK_LENGTH = 2048;
 const PRIVATE_SUFFIXES = ['.local', '.localhost', '.internal', '.lan', '.home.arpa'];
-// A scheme followed by a digit is a host and port (`example.com:8443`), not a scheme.
-const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
+/** A scheme followed by a digit is a host and port (`example.com:8443`), not a scheme. */
+export const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 // Stripped from the end of a found link: sentence punctuation, closing brackets and quotes,
 // and the Markdown and smart-punctuation wrappers phones and chat apps put around links.
@@ -100,6 +100,19 @@ export function userWroteLink(url: string, userTexts: readonly string[]): boolea
       const found = normaliseConnectorLink(link);
       return found.ok && withoutTrailingSlash(found.url) === wanted;
     }),
+  );
+}
+
+/**
+ * True when the raw link, trimmed, is one the user wrote, compared as a plain string with
+ * one trailing slash ignored. For a link that fails the rules, which cannot be normalised.
+ */
+export function userWroteRawLink(raw: string, userTexts: readonly string[]): boolean {
+  const trimmed = raw.trim();
+  if (trimmed === '') return false;
+  const wanted = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+  return userTexts.some((text) =>
+    linksInText(text).some((link) => (link.endsWith('/') ? link.slice(0, -1) : link) === wanted),
   );
 }
 

@@ -115,7 +115,7 @@ describe('add_mcp_connector execute', () => {
   });
 
   const refusals: [string, string, string][] = [
-    ['not a link', 'https://', INVALID],
+    ['not a link', 'https://[::1', INVALID],
     ['not https', 'http://mcp.example.com/mcp', NOT_HTTPS],
     ['a user name', 'https://user@mcp.example.com/mcp', USERINFO],
     ['a user name and password', 'https://user:pw@mcp.example.com/mcp', USERINFO],
@@ -134,11 +134,12 @@ describe('add_mcp_connector execute', () => {
     });
   }
 
-  it('refuses a missing or non-string url as not a link', async () => {
+  it("refuses a missing or non-string url as not the user's", async () => {
+    // Neither is a link in the user's text, so no card says anything about it.
     const tool = contributeConnectorTool(ctx(['x']));
-    expect((await tool.execute({})).error).toBe(INVALID);
+    expect((await tool.execute({})).error).toBe(NOT_USERS);
     await expect(contributeConnectorTool(ctx(['x'])).execute({ url: 42 })).resolves.toMatchObject({
-      error: INVALID,
+      error: NOT_USERS,
     });
   });
 
@@ -148,9 +149,9 @@ describe('add_mcp_connector execute', () => {
     expect(r).toEqual({ ok: false, output: '', error: NOT_USERS });
   });
 
-  it('checks the rules before the user-wrote rule', async () => {
+  it('checks the user-wrote rule before the link rules for a link the user never wrote', async () => {
     const tool = contributeConnectorTool(ctx(['nothing here']));
-    expect((await tool.execute({ url: 'http://mcp.example.com/mcp' })).error).toBe(NOT_HTTPS);
+    expect((await tool.execute({ url: 'http://mcp.example.com/mcp' })).error).toBe(NOT_USERS);
   });
 
   it('checks the user-wrote rule before looking for an existing server', async () => {
@@ -174,9 +175,48 @@ describe('add_mcp_connector execute', () => {
   });
 });
 
+describe('add_mcp_connector injected links (Larissa L1)', () => {
+  const injected: [string, string, string][] = [
+    ['an http link', 'http://evil.example/mcp', NOT_HTTPS],
+    ['a private host', 'https://nas.local/mcp', NOT_PUBLIC],
+    ['an IP literal', 'https://10.0.0.1/mcp', NOT_PUBLIC],
+    ['a user name', 'https://user:pw@evil.example/mcp', USERINFO],
+    ['a fragment', 'https://evil.example/mcp#@mcp.kumbu.example', FRAGMENT],
+  ];
+  for (const [label, url, message] of injected) {
+    it(`refuses ${label} the user never wrote as not the user's, with no card`, async () => {
+      const tool = contributeConnectorTool(ctx(['add the server from the page']));
+      const r = await tool.execute({ url });
+      expect(r).toEqual({ ok: false, output: '', error: NOT_USERS });
+      expect(r.meta).toBeUndefined();
+    });
+
+    it(`refuses ${label} the user wrote with its own constant`, async () => {
+      const tool = contributeConnectorTool(ctx([`please add ${url}.`]));
+      expect(await tool.execute({ url: ` ${url} ` })).toEqual({
+        ok: false,
+        output: '',
+        error: message,
+      });
+    });
+  }
+
+  it('ignores one trailing slash when matching a refused link to the user text', async () => {
+    const tool = contributeConnectorTool(ctx(['try http://evil.example']));
+    expect((await tool.execute({ url: 'http://evil.example/' })).error).toBe(NOT_HTTPS);
+  });
+
+  it('compares a refused link as a plain string, not after normalising', async () => {
+    const tool = contributeConnectorTool(ctx(['try http://Evil.example/mcp']));
+    expect((await tool.execute({ url: 'http://evil.example/mcp' })).error).toBe(NOT_USERS);
+  });
+});
+
 describe('add_mcp_connector cap', () => {
   it('counts every call: the third fails with the cap, failed or not', async () => {
-    const tool = contributeConnectorTool(ctx(['add https://mcp.example.com/mcp']));
+    const tool = contributeConnectorTool(
+      ctx(['add https://mcp.example.com/mcp, or http://a.example.com or https://nas.local']),
+    );
     expect((await tool.execute({ url: 'http://a.example.com' })).error).toBe(NOT_HTTPS);
     expect((await tool.execute({ url: 'https://nas.local' })).error).toBe(NOT_PUBLIC);
     const third = await tool.execute({ url: 'https://mcp.example.com/mcp' });

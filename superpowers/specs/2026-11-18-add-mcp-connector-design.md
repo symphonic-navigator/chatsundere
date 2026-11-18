@@ -90,7 +90,7 @@ The prompt line is the soft barrier. The hard barriers are in code: the link mus
 
 It contacts nothing. Its per-send context carries the texts of this chat's user messages (the prior user turns and the current one, as the send path already holds them), the local `mcpServers` rows, and nothing else.
 
-Validation, in this order; the first failing rule decides:
+Validation, in this order; the first failing rule decides. One exception keeps an injected link's host off the screen: after the cap, a link that fails rules 2–7 and does not appear, trimmed and compared as a plain string (one trailing slash ignored), among the links found in the user's messages is refused as *not the user's* (no card), before its own rule; a link that passes rules 2–7 meets rule 8 as written.
 
 1. **Cap.** At most two calls per reply count; the third and later fail. Every call counts, failed or not, so the tool cannot be used to probe repeatedly. Only the first successful proposal of a reply shows a card; a second successful one in the same reply fails with the cap message.
 2. **Parse and normalise.** `new URL(raw.trim())`; a missing scheme is completed with `https://` first. The result's `href` is the link from here on (IDN → punycode, non-ASCII in path and query percent-encoded, tab and newline stripped).
@@ -239,7 +239,7 @@ The sibling unit "Back means one thing" may change how `back` behaves app-wide; 
 
 **Threat.** Text the model reads — a web page from `web_fetch`, a knowledge document, an artefact, another MCP tool's result, an imported chat — tells it to call `add_mcp_connector` with an attacker's server, or with a link that smuggles conversation content in its path or query (`https://evil.example/mcp?c=<summary>`). If added, the server receives the arguments of every call to its tools; even without adding, a check of a smuggling link would deliver the payload.
 
-**What an injected call looks like to the user.** Usually nothing: the tool refuses any link the user did not write in this chat (§2.4 rule 8) and no card appears; the companion may say it could not propose the link. If the injected text names a link the user did write earlier, a card appears for that link — the user's own link, which they had brought for this purpose.
+**What an injected call looks like to the user.** Usually nothing: the tool refuses any link the user did not write in this chat (§2.4 rule 8) and no card appears — also when the link breaks rules 2–7, so an injected `http://evil.example/mcp` never shows a *Failed* card naming its host; the companion may say it could not propose the link. If the injected text names a link the user did write earlier, a card appears for that link — the user's own link, which they had brought for this purpose.
 
 **Why it is harmless if ignored.**
 

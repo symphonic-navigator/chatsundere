@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useSessionStore } from '@chatsundere/ui-shared';
+import { useId } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { McpServerRow, PillRow } from '../../boot/client-data-db.js';
 import { dismissConnectorPill } from '../../data/connector-pill.js';
-import { type PendingSignInSummary, usePendingSignIns } from '../../data/mcp-oauth-pending.js';
+import {
+  PENDING_SIGN_IN_LIFETIME_MS,
+  type PendingSignInSummary,
+  usePendingSignIns,
+} from '../../data/mcp-oauth-pending.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { usePersona } from '../../data/personas.js';
 import { passphraseLoginPath } from '../../data/send-errors.js';
 import { findServerForLink } from '../../mcp/find-server-for-link.js';
 import { waitingScreenPath } from '../../mcp/oauth/sign-in-session.js';
 import { isOnForPersona } from '../../mcp/resolve-active.js';
-import { CONNECTOR_CAP } from '../../tools/add-mcp-connector.js';
+import { CONNECTOR_CAP, CONNECTOR_NOT_USERS } from '../../tools/add-mcp-connector.js';
 import {
   type ConnectorLinkRefusal,
+  HAS_SCHEME,
   emphasisSplit,
   normaliseConnectorLink,
 } from '../../tools/connector-link.js';
@@ -29,13 +35,7 @@ const FAILED_SENTENCE: Readonly<Record<ConnectorLinkRefusal, string>> = {
   'too-long': 'That link is too long.',
 };
 
-// The same scheme test as the link rules: `example.com:8443` is a host and port.
-const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
-
 const LINK_CLASS = 'cs-btn connector-pill-btn';
-
-// A pending sign-in's lifetime, as listPendingSignIns counts it; a cached list can outlive it.
-const SIGN_IN_LIFETIME_MS = 10 * 60_000;
 
 type Derived =
   | { kind: 'hidden' }
@@ -74,8 +74,11 @@ function rawArgumentUrl(argumentsJson: unknown): string | null {
 function derive(payload: Record<string, unknown> | null, status: PillRow['status']): Derived {
   if (status === 'pending') return { kind: 'hidden' };
   if (status === 'failed') {
-    // A capped call never had a card, whatever its link was (§2.4): judged before the link.
-    if (payload?.error === CONNECTOR_CAP) return { kind: 'hidden' };
+    // A capped call, or one for a link the user never wrote, never had a card, whatever its
+    // link was (§2.4): judged before the link, so an injected link's host is never shown.
+    if (payload?.error === CONNECTOR_CAP || payload?.error === CONNECTOR_NOT_USERS) {
+      return { kind: 'hidden' };
+    }
     const raw = rawArgumentUrl(payload?.argumentsJson);
     if (raw === null) return { kind: 'failed', host: null, reason: 'invalid' };
     const link = normaliseConnectorLink(raw);
@@ -109,7 +112,8 @@ function signInFor(
   return (pending ?? []).find(
     (p) =>
       p.isNewServer &&
-      now - p.createdAt < SIGN_IN_LIFETIME_MS &&
+      // Counted here too: a cached list can outlive the sign-ins in it.
+      now - p.createdAt < PENDING_SIGN_IN_LIFETIME_MS &&
       typeof p.url === 'string' &&
       findServerForLink([{ url: p.url } as McpServerRow], link) !== undefined,
   );
@@ -150,6 +154,7 @@ export function ConnectorPill({
   const { data: servers } = useMcpServers();
   const { data: pending } = usePendingSignIns();
   const { data: persona } = usePersona(personaId ?? null);
+  const lineId = useId();
 
   const payload = record(row.payload);
   const derived = derive(payload, row.status);
@@ -181,6 +186,8 @@ export function ConnectorPill({
     const propose = () =>
       navigate(`/app/integrations/new${back}`, { state: { proposedLink: url } });
     const match = findServerForLink(servers ?? [], url);
+    // Until the rows have loaded, an existing server looks new: no way in that could add it twice.
+    const hold = chatPath === null || servers === undefined;
     const dismissedAt = payload?.connectorDismissedAt;
     const dismissed = typeof dismissedAt === 'number' && Number.isFinite(dismissedAt);
     const signIn = mk ? signInFor(pending, url, Date.now()) : undefined;
@@ -202,7 +209,7 @@ export function ConnectorPill({
       line = 'Chatsundere needs your passphrase once more before it can add a server.';
       actions = (
         <>
-          <Button tone="primary" className="connector-pill-btn" disabled>
+          <Button tone="primary" className="connector-pill-btn" disabled aria-describedby={lineId}>
             Check & add ↗
           </Button>
           <Link to={passphraseLoginPath(chatPath ?? '/app')} className={LINK_CLASS}>
@@ -228,19 +235,14 @@ export function ConnectorPill({
     } else if (dismissed) {
       line = 'Not now — you can still add it.';
       actions = (
-        <Button className="connector-pill-btn" onClick={propose} disabled={chatPath === null}>
+        <Button className="connector-pill-btn" onClick={propose} disabled={hold}>
           Add anyway ↗
         </Button>
       );
     } else {
       actions = (
         <>
-          <Button
-            tone="primary"
-            className="connector-pill-btn"
-            onClick={propose}
-            disabled={chatPath === null}
-          >
+          <Button tone="primary" className="connector-pill-btn" onClick={propose} disabled={hold}>
             Check & add ↗
           </Button>
           <Button className="connector-pill-btn" onClick={() => void dismissConnectorPill(row.id)}>
@@ -253,7 +255,11 @@ export function ConnectorPill({
       <>
         <span className="connector-pill-link">{url}</span>
         <span className="connector-pill-actions">{actions}</span>
-        {line ? <span className="connector-pill-line">{line}</span> : null}
+        {line ? (
+          <span id={lineId} className="connector-pill-line">
+            {line}
+          </span>
+        ) : null}
       </>
     );
   }
