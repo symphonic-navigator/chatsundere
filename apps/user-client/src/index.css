@@ -6013,6 +6013,41 @@ html {
   height: auto;
 }
 
+/* The chat top bar's avatar sits 0.25rem right of the hamburger, which takes
+   half of that gap: the avatar takes the other half and grows rightwards. */
+.topbar-avatar-btn::before {
+  inset: -4px -6px -4px -2px;
+  width: auto;
+  height: auto;
+}
+
+/* A bookmark's rename and star sit 0.25rem apart, 0.5rem right of the label
+   that jumps to the message: each takes half of each gap, and the star grows
+   rightwards into the page's gutter (rename 32 wide, star 44, both 46 high). */
+.toc-entry-rename::before {
+  inset: -10px -2px -10px -4px;
+  width: auto;
+  height: auto;
+}
+.toc-entry-star::before {
+  inset: -10px -17px -10px -2px;
+  width: auto;
+  height: auto;
+}
+
+/* A row's favourite star sits 8 px right of the row's main button: it takes
+   half of that and grows rightwards over the row's padding and the gutter.
+   Where a ⋯ trigger follows, the trigger's own 44 px box already reaches to
+   2 px from the star, so the star takes 1 px of that side. */
+.treasury-row-star::before {
+  inset: -10px -30px -10px -4px;
+  width: auto;
+  height: auto;
+}
+.treasury-row-star:has(+ .cs-overflow)::before {
+  right: -1px;
+}
+
 /* The provider page's show-key eye sits 0.5rem right of the key field, inside
    the field's frame: towards the field half the gap, the rest of the 44 px
    rightwards over the frame's padding and the page gutter. */
