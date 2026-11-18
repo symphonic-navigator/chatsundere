@@ -117,7 +117,8 @@ History gates by persona: a chat is visible only when its persona is in `useFilt
 1. The scan's work list is built from the already-gated chat list (`gatedChats`, then the persona filter). A chat whose persona is hidden is **never read** from `messages` — not read-and-dropped, not read at all.
 2. A chat whose persona row is missing is skipped (History already skips such rows).
 3. When the visible persona set changes mid-scan (adult mode flips), the running scan is aborted, its results are discarded, and a new scan starts over the new set. `nsfwPanic()` navigates away anyway; the abort is the belt to its braces.
-4. Results live in component state and in the single in-memory return cache (§10), which is keyed by the visible persona set and cleared when it changes. Nothing is written to IndexedDB, `sessionStorage`, `localStorage` or the TanStack Query cache. The URL carries the query text (§10), which the user typed; it carries no result.
+4. Results live in component state and in the single in-memory return cache (§10), which is keyed by the visible persona set and cleared when it changes. Nothing is written to IndexedDB, `localStorage` or the TanStack Query cache; `sessionStorage` holds only the content-free generation token (§10).
+5. **The query text is never in the URL or in a storage key.** It lives in `location.state` of the History entry, tagged with the generation token, and is discarded on arrival after an adult-mode flip, a lock or a sign-out (§10). The address bar shows at most `?tab=` and `?personaId=`.
 
 Tests assert (1) structurally: a gated chat's id is never passed to the `messages` read.
 
@@ -194,7 +195,9 @@ Measured on 2026-11-18 in the session container's headless Chromium with Dexie 4
 | 20 000 (200 chats × 100) | ~600 ms | ~480 ms | ~490 ms |
 | 100 000 (1 000 chats × 100) | ~3.0 s | ~2.4 s | ~2.5–2.7 s |
 
-The cost is reading and structured-cloning the rows out of IndexedDB, not the string test; a miss costs as much as a hit. A mid-range phone is plausibly 3–5× slower: **20 000 messages ≈ 1.5–2.5 s, 100 000 ≈ 7–12 s.** 20 000 is a heavy user today; 100 000 is a long-term one. A blocking "wait for everything" search is therefore wrong at the top end, and an index is not justified (it would be a schema change, a write cost on every message, and sync interplay) while a streamed scan stays usable.
+The cost is reading and structured-cloning the rows out of IndexedDB, not the string test; a miss costs as much as a hit. A mid-range phone is plausibly 3–5× slower: **20 000 messages ≈ 1.5–2.5 s, 100 000 ≈ 7–12 s.** 20 000 is a heavy user today; 100 000 is a long-term one. **Large non-text blocks cost too.** Reasoning blocks are part of the row, so they are read and cloned although they are not searched. Re-run with a ~10 kB reasoning block on every persona turn (long thinking models): 20 000 messages ≈ 1.05 s, 100 000 ≈ 5.0 s — about twice the cost, so a phone might take 15–25 s for 100 000 such messages. Pills and attachments are separate tables (`pills`, `attachments`); a message row holds only `{ type: 'pill', pillId }`, so they add nothing. This is why the streamed, newest-first order and the cap matter more than raw speed: the first screen of hits comes from the first chats either way.
+
+A blocking "wait for everything" search is therefore wrong at the top end, and an index is not justified (it would be a schema change, a write cost on every message, and sync interplay) while a streamed scan stays usable.
 
 ### 8.2 Strategy
 
@@ -221,24 +224,32 @@ The scan stops after **300 message hits** and shows the cap note (§7.3). Hits f
 
 ---
 
-## 10. Keeping your place: tab, query and scroll in the address
+## 10. Keeping your place: tab in the address, query and scroll in navigation state
 
-- **Tab in the URL:** `?tab=bookmarks` (absent ⇒ Chats), written with `replace` like the persona filter. Returning from a bookmark lands on Bookmarks.
-- **Query in the URL:** `?q=` is now mirrored (debounced with the search, `replace`), not only read once. Returning from a hit restores the query. The hub's Recent chats link keeps working unchanged — it already passes `q` and `personaId`.
+**The query text never goes into the URL or a storage key.** A query string is sent to the hosting server whenever the document is requested (a reload, a cold start on that URL, a service-worker miss) and lands in its access log — plaintext about private chats on the server, against CLAUDE.md §3 rule 1. In a browser tab it also enters the browser's history and address-bar suggestions, where it outlives an adult-mode flip, a lock and a sign-out. `replace` prevents neither. (Coordinator's finding, 2026-11-18, rated hard.)
+
+- **Tab in the URL:** `?tab=bookmarks` (absent ⇒ Chats), written with `replace` like the persona filter. It carries no content. `?personaId=` stays as today.
+- **Query and scroll in `history.state`:** History keeps `{ q, scrollY, gen }` in React Router's `location.state`, written with `replace` (the query debounced with the search, the scroll offset on leave). `history.state` survives Back and a reload of that entry, is never sent to the server and never shown in the address bar or the browser's history suggestions.
+- **Invalidation by generation:** `gen` is a random token, the only thing History keeps in `sessionStorage` (under a fixed key, no content), regenerated on lock, sign-out and adult-mode flip. On mount, a `location.state` whose `gen` is not the current one is discarded and the entry's state is replaced with an empty one at once. The app cannot rewrite the state of other entries deeper in the tab's back stack; after a flip, lock or sign-out such an entry still holds the old text inside the browser's in-tab memory, but the app never shows it (it is discarded on arrival) and it never leaves the device. If the lock or sign-out flow already reloads the document or clears the tab, that is stronger still; the plan checks which.
+- **Inbound `?q=`:** old links (and any bookmark of an old History URL) may still carry `?q=`. History reads it once, moves it into `location.state`, and strips it from the address with `replace` in the same tick.
 - **Return cache (one entry, memory only), partial results included:** the last message search — finished, capped *or still running* — is kept in a module-level variable keyed by (query, persona filter, visible persona ids), together with a **resume point** (the index of the next chat to scan). On large histories the usual case is tapping a hit before the scan is done, so a cache of finished searches only would miss exactly when it is needed. On return with the same key, the cached groups render at once, scroll is restored against them, and the scan continues from the resume point. A new query, a filter change, an adult-mode flip, a lock or sign-out drops it. It is a snapshot, not kept live against message edits (deletions and renames of chats *are* reflected, §7.1); stale-by-one-visit is acceptable for a read-only list. See Q6.
-- **Scroll restoration, local to History:** on leaving History, store `window.scrollY` in `sessionStorage` under `history-scroll:<search string>` (tab + q + personaId, normalised), and restore it on mount with the same search string once the list has rendered (title list from the Query cache, message list from the return cache). Keying on the search string rather than `location.key` makes both Back *and* a forward visit to the same History URL (below) land in place, while an ordinary visit from the Entrance Hall or the quick menu without a held search — a different search string — starts at the top. Only a number is stored, no content; at most one entry is kept (written on leave, replacing the previous one). If the content is shorter than the stored offset, the browser clamps — acceptable.
+- **Scroll restoration, local to History:** restored from `location.state.scrollY` once the list has rendered (title list from the Query cache, message list from the return cache). Back lands in place, and so does the quick menu's return (§10.1), which navigates with the held state. An ordinary visit from the Entrance Hall or a quick menu without a held search has no state and starts at the top. If the content is shorter than the offset, the browser clamps — acceptable.
 
 ### 10.1 Getting back without a Back button
 
 The search → hit → back → next hit loop must not depend on a system Back: the chat page has no page bar, an installed iOS PWA has no browser Back button, and whether its edge swipe navigates back has to be checked on the device. Today the only in-app way from a chat to History is the quick menu's **History** entry (`ChatQuickMenu.tsx`), which opens a *new* visit (`?personaId=<this persona>&return=…`): query, tab and place gone, persona filter forced.
 
-Change, with no new chrome in the chat: History remembers, in memory, the **last History URL it was left from** when it was left *to a chat via a hit or a bookmark* (cleared on lock, sign-out and adult-mode flip). When the chat that was opened that way shows the quick menu, its History entry goes back to that URL — `navigate(-1)` when the previous history entry is that URL, else a navigation to it. In any other chat, or after the user has moved on to another chat, the entry behaves as today. With §10's search-string keys, both paths restore the query, tab, results and scroll.
+Change, with no new chrome in the chat: History remembers, in memory, the **last History location it was left from** — path with `?tab`/`?personaId` plus its `location.state` — when it was left *to a chat via a hit or a bookmark* (cleared on lock, sign-out and adult-mode flip). When the chat that was opened that way shows the quick menu, its History entry goes back to that location — `navigate(-1)` when the previous history entry is that location, else `navigate(path, { state })`. In any other chat, or after the user has moved on to another chat, the entry behaves as today. Both paths restore the query, tab, results and scroll.
 
-This is a one-entry change in `ChatQuickMenu.tsx`, which the parallel papercut unit also touches (it owns the quick menu); see Q7. The alternative, a visible "‹ Results" chip in the chat, is Q8.
+The logic lives in a new `lib/history-return.ts` (`historyReturnTarget()`), self-contained, so the later "Back means one thing" unit can call or replace it.
+
+The diff in `ChatQuickMenu.tsx`, which the parallel papercut unit owns, is a single line (Q7, cleared by the coordinator). The alternative, a visible "‹ Results" chip in the chat, is Q8.
 
 ### 10.2 The hub's link
 
 The persona hub's Recent chats filter (`RecentChatsAccordion.tsx`) now sends its query to a History that also searches messages. On its no-match state (`No chats match "x"`), the link reads **"Search messages in History →"** instead of "All in History →", so it says what the other side will do. With matches, the link text stays.
+
+The link passes `q` today in the URL (`/app/history?personaId=…&q=…&return=…`). Since that text now drives a message search, it moves to navigation state: the link becomes `<Link to="/app/history?personaId=…&return=…" state={{ q, gen }}>`. The `?q=` read in History stays only as the inbound fallback above.
 
 ---
 
@@ -251,11 +262,14 @@ New, all under `apps/user-client/src`:
 - `lib/search/scan-messages.ts` — the per-chat streamed scan: `scanMessages({ chats, query, signal, onProgress, onHits, cap })`. Pure Dexie read, no React.
 - `components/history/useMessageSearch.ts` — debounce, abort, flush batching, return cache.
 - `components/history/SearchHitList.tsx` — renders `SearchHitGroup[]` (§7.2).
-- `components/history/useHistoryScrollRestore.ts`.
+- `components/history/useHistoryNavState.ts` — `q`/`scrollY` in `location.state`, the generation check, the inbound `?q=` strip, scroll restoration.
+- `lib/history-return.ts` — `historyReturnTarget()` and the generation token (regenerated on lock, sign-out, adult-mode flip).
 
-Changed: `routes/app/history.tsx` (sections, URL state, empty state), `components/history/HistorySearchBar.tsx` (placeholder default), `components/history/BookmarksList.tsx` (text-match snippet), `components/chat/ChatQuickMenu.tsx` (History entry, §10.1 — pending Q7), `routes/app/chat/chat-page.tsx` (focus fallback in the jump effect only, §7.4), `components/persona-hub/RecentChatsAccordion.tsx` (link label), `content/help/history.md` (the "Finding a conversation" paragraph), a few lines in `src/index.css` for `mark` styling in hits (small and local, the file is shared with other 0.5.0 units).
+Changed: `routes/app/history.tsx` (sections, URL state, empty state), `components/history/HistorySearchBar.tsx` (placeholder default), `components/history/BookmarksList.tsx` (text-match snippet), `components/chat/ChatQuickMenu.tsx` (one line, §10.1), `routes/app/chat/chat-page.tsx` (focus fallback in the jump effect only, §7.4), `components/persona-hub/RecentChatsAccordion.tsx` (link label, `q` into state), `content/help/history.md` (the "Finding a conversation" paragraph), a few lines in `src/index.css` for `mark` styling in hits (small and local, the file is shared with other 0.5.0 units).
 
-Tests (Vitest, `fake-indexeddb`): folding and snippets (accents, emoji graphemes, mark offsets after folding, TEAL and Markdown stripped); scan order, cap, abort, and that a gated chat's id is never queried; route tests for `tab`/`q` in the URL, the one-character hint, the empty states, and the Bookmarks label-or-text match.
+**Size, honestly:** medium-large for one unit. About 7 new and 8 changed source files; roughly 900–1 100 lines of code and 700–900 lines of tests. The scan with its hook and the `history.tsx` rework are about half; the navigation state and return path, the return cache, the bookmark text match and the focus fallback are the rest. No part is speculative, and each answers a Laura or coordinator finding; if Chris wants it smaller, the bookmark text match (Q4) and the hub label (§10.2) are the cleanest cuts.
+
+Tests (Vitest, `fake-indexeddb`): folding and snippets (accents, emoji graphemes, mark offsets after folding, TEAL and Markdown stripped); scan order, cap, abort, and that a gated chat's id is never queried; route tests for `tab` in the URL and `q` only in `location.state` (never in `location.search` after mount, inbound `?q=` stripped, stale `gen` discarded), the one-character hint, the empty states, and the Bookmarks label-or-text match.
 
 ---
 
@@ -273,7 +287,7 @@ Tests (Vitest, `fake-indexeddb`): folding and snippets (accents, emoji graphemes
 
 **Q6 — The one-entry return cache, with partial results and a resume point.** Recommendation: **keep it**. *Reason:* search → hit → back → next hit is the main loop; re-scanning 2–12 s on every return and losing the scroll position would make the feature feel broken, and on a large history you usually tap before the scan is done. It lives in memory only and is dropped on any query, filter or adult-mode change, lock and sign-out. The price is a snippet that can be one visit stale.
 
-**Q7 — Who changes the quick menu's History entry?** (For the coordinator as much as Chris.) §10.1 needs a one-entry change in `ChatQuickMenu.tsx`, which the parallel papercut unit owns. Recommendation: **I make the change as one isolated function** (`historyReturnTarget()` in a new `lib/history-return.ts`, called from the entry's `run`) so the diff in `ChatQuickMenu.tsx` is a single line and merges trivially with the papercut unit's work. *Reason:* without it, the main loop has no in-app way back on an installed iOS PWA — Laura rates it a hard defect.
+**Q7 — Who changes the quick menu's History entry?** *Cleared by the coordinator (2026-11-18):* this unit makes it, as `historyReturnTarget()` in a new `lib/history-return.ts` and a single line in `ChatQuickMenu.tsx`; the papercut session has been told to expect it. Kept self-contained for the later "Back means one thing" unit.
 
 **Q8 — A visible "‹ Results" chip in the chat instead?** Recommendation: **no**, the quick-menu route of §10.1. *Reason:* it leaves the chat surface untouched (the chat is the centre; chrome there is expensive), and the quick menu is where "History" already lives. A chip would be more discoverable; if Chris prefers it, it is a small addition on top, not a replacement.
 
@@ -298,6 +312,8 @@ Laura audited the first draft on 2026-11-18: **2 hard defects, 7 soft notes**, d
 
 Pre-squash pass follows after the build.
 
+**Coordinator review (2026-11-18), also worked in:** the query text no longer goes into the URL or a storage key (hard: zero-knowledge and adult mode) — §6 point 5, §10, §10.2, steps 24–26; the cost of large non-text blocks measured (§8.1); the unit's size stated (§11); Q7 cleared.
+
 ---
 
 ## 14. Manual verification
@@ -309,7 +325,7 @@ Run on the phone (380 px class) with a real, long history — once in the browse
 3. **Find a remembered sentence.** Type two or three words you remember from a persona reply in an older chat, in a different order and without accents or capitals. *Pass:* the sticky count line disappears; "In messages" appears with a "searching n / m chats" pill; hits stream in newest chat first; groups never reorder; the snippets show all your words highlighted where they fit, and no `**` or TEAL tags.
 4. **Typing stays fluid.** While a scan runs over the full history, keep typing and scroll the list. *Pass:* no stutter in the field; the old scan stops and the new one starts (the pill restarts).
 5. **Jump.** Tap a hit. *Pass:* the chat opens at that message, centred, with the highlight pulse; it does not snap to the bottom.
-6. **Return by system Back.** Press the phone's Back (or the browser's). *Pass:* History shows the same query, tab, results and scroll position, with no new "searching" pill if the scan had finished. Tap the next hit; Back again; same.
+6. **Return by system Back.** Press the phone's Back (or the browser's). *Pass:* History shows the same query, tab, results and scroll position, with no new "searching" pill if the scan had finished; the address bar shows no query text. Tap the next hit; Back again; same.
 7. **Return by quick menu (installed PWA).** In the installed PWA, tap a hit, then open the chat's quick menu and choose History. *Pass:* the same History state as step 6. Then open a *different* chat from the Entrance Hall and choose History in its quick menu. *Pass:* History opens as today, filtered to that chat's persona, at the top. Note whether the iOS edge swipe goes back at all.
 8. **Return before the scan is done.** On the full history, tap a hit while the pill still shows. Return. *Pass:* the results so far show at once, at your scroll position, and the pill continues from where it stopped rather than from zero.
 9. **More in this chat.** In a chat with more than three hits, tap "+ n more in this chat". *Pass:* the group expands in place; groups above it don't move.
@@ -327,3 +343,6 @@ Run on the phone (380 px class) with a real, long history — once in the browse
 21. **Hub link.** On a persona's hub, filter Recent chats by a word that is in no title but in a message. *Pass:* the link reads "Search messages in History →" and opens History with that persona, the query and the message hits.
 22. **380 px.** At 380 px wide, with a long query. *Pass:* no horizontal scroll; snippets wrap to at most three lines; the progress pill fits on the section header line.
 23. **Timing on the phone.** With your real history, note roughly how many chats you have, the time to the first hits and to the pill disappearing. *Pass:* first hits within about a second; record the totals in the PR.
+24. **No query in the address.** Search "paprika" on History, in a browser tab. *Pass:* the address bar shows `/app/history` with at most `?tab=` and `?personaId=`, never the word; the browser's history and address-bar suggestions don't offer it. Reload. *Pass:* the query and results are back.
+25. **Gone after flip, lock, sign-out.** Search a word, open a hit, return. Flip adult mode (on → off). Return to History by Back. *Pass:* empty field, no results. Repeat with a lock and unlock, and with a sign-out and sign-in. *Pass:* the same each time. In the browser's devtools, check `history.state` on the History entry and Application → Storage. *Pass:* no query text anywhere; `sessionStorage` holds only the opaque generation token.
+26. **Old link with `?q=`.** Open `/app/history?q=paprika` by hand. *Pass:* the search runs, and the address loses `?q=` at once.
