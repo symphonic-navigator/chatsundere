@@ -12,6 +12,12 @@ import { hostOf } from './sign-in-copy.js';
 type SignInCheck = Extract<CheckResult, { kind: 'sign-in' }>;
 
 const labelClass = 'mb-1 block text-xs uppercase tracking-widest text-paper-soft';
+/**
+ * A checkbox row of the MCP server settings. Its label paints nothing, but the rows sit
+ * 0.75rem apart, so an invisible 44 px hit area would overlap the next one: the row
+ * itself grows to 44 high, checkbox and text centred in it.
+ */
+export const CHECKBOX_ROW_CLASS = 'cs-tap-44 flex items-center gap-2 text-xs text-paper-soft';
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
 
@@ -104,7 +110,7 @@ export function SignInSettings(props: {
   );
   const localNetworkField = (
     <label
-      className="flex items-center gap-2 text-xs text-paper-soft"
+      className={CHECKBOX_ROW_CLASS}
       title="Your browser connects straight to the server, which must allow direct browser access (CORS)."
     >
       <input
@@ -145,7 +151,7 @@ export function SignInSettings(props: {
 
       {proposal ? null : prefixField}
 
-      <label className="flex items-center gap-2 text-xs text-paper-soft">
+      <label className={CHECKBOX_ROW_CLASS}>
         <input
           type="checkbox"
           checked={onByDefault}
@@ -155,7 +161,7 @@ export function SignInSettings(props: {
         On by default
       </label>
 
-      <label className="flex items-center gap-2 text-xs text-paper-soft">
+      <label className={CHECKBOX_ROW_CLASS}>
         <input
           type="checkbox"
           checked={autoRun}

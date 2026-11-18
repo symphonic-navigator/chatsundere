@@ -3830,11 +3830,12 @@ h1 {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+/* Every card action is a .cs-btn, whose thumb-pass min-height gives it 44 px; a link
+ * takes that min-height only once it is no longer inline. */
 .connector-pill-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
   max-width: 100%;
   text-decoration: none;
   overflow-wrap: anywhere;
