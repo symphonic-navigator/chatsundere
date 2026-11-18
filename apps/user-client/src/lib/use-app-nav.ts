@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { trailOf } from '../state/nav-trail.store.js';
+import { claimTraversal, trailOf } from '../state/nav-trail.store.js';
 import { type Trail, findReturnDepth } from './nav-trail.js';
 
 /** The app's ways of going back (spec "Back means one thing", "Three moves"). */
@@ -21,13 +21,13 @@ export function useAppNav(): AppNav {
   return useMemo(
     () => ({
       back(fallback) {
-        if (trailOf(key).length > 0) navigate(-1);
-        else navigate(fallback, { replace: true });
+        if (trailOf(key).length === 0) navigate(fallback, { replace: true });
+        else if (claimTraversal(key)) navigate(-1);
       },
       returnTo(to) {
         const depth = findReturnDepth(trailOf(key), to);
-        if (depth !== null) navigate(-depth);
-        else navigate(to, { replace: true });
+        if (depth === null) navigate(to, { replace: true });
+        else if (claimTraversal(key)) navigate(-depth);
       },
       trail: () => trailOf(key),
     }),

@@ -40,6 +40,15 @@ function Page({ name }: { name: string }) {
       <button type="button" onClick={() => navigate('/c')}>
         push c
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          navigate('/b');
+          navigate('/c');
+        }}
+      >
+        push twice
+      </button>
       <button type="button" onClick={() => navigate('/c2', { replace: true })}>
         replace c2
       </button>
@@ -153,5 +162,30 @@ describe('the trail in window.history.state', () => {
     });
     expect(where()).toBe('/b');
     expect(trail()).toBe('/a');
+  });
+
+  it('one move fires once: a double tap of back steps back one page, not two', async () => {
+    render(<BrowserRouter>{routes()}</BrowserRouter>);
+    click('push b');
+    click('push c');
+    await act(async () => {
+      click('back');
+      click('back');
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(where()).toBe('/b');
+  });
+});
+
+describe('a trail it cannot trust', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/a');
+  });
+
+  it('is dropped when an entry was skipped in one batch, so back goes up instead of astray', () => {
+    render(<BrowserRouter>{routes()}</BrowserRouter>);
+    click('push twice');
+    expect(where()).toBe('/c');
+    expect(trail()).toBe('');
   });
 });

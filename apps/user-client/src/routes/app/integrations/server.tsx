@@ -190,7 +190,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
         return;
       }
     }
-    // The sign-in page is done: the server's page takes its place in the history.
+    // The add form is done: the server's page takes its place in the history.
     navigate(`/app/integrations/${serverId}`, { replace: true });
   }
 
@@ -501,7 +501,8 @@ function IntegrationServerForm({
       };
       await upsert.mutateAsync(row);
       setDirty(false);
-      back();
+      // Save leaves the way ‹ does; Remove (below) goes up to the list.
+      nav.back('/app/integrations');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

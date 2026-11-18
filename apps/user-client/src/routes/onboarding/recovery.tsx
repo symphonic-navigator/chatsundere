@@ -189,12 +189,12 @@ export function OnboardingRecovery() {
           {screen.message}
         </p>
         {screen.action === 'onboarding' ? (
-          <Link
+          <BackLink
             to="/onboarding"
             className="mt-4 inline-block text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to onboarding
-          </Link>
+          </BackLink>
         ) : (
           <button
             type="button"

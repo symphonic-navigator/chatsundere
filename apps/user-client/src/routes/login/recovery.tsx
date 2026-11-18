@@ -24,6 +24,7 @@ import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { rateLimitMessage } from '../../lib/recovery-copy.js';
 import { httpServerClient } from '../../lib/server-client.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { PassphrasePair, RecoveryKeyLike } from '../../lib/validators.js';
 
 type RecoveryScope = 'local' | 'full';
@@ -46,6 +47,7 @@ type Step =
  */
 export function Recovery() {
   const navigate = useNavigate();
+  const nav = useAppNav();
 
   const [step, setStep] = useState<Step>({ kind: 'step1' });
 
@@ -509,7 +511,7 @@ export function Recovery() {
         <div className="text-center">
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => nav.back('/login')}
             className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to sign-in

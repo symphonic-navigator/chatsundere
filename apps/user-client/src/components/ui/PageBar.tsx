@@ -31,9 +31,9 @@ export interface PageBarProps {
  * The shared page chrome row (spec §2). Sits sticky beneath the brand bar and
  * never scrolls away. Shows where you are (the bold current crumb), a real ≥44px
  * back control that goes where the user came from (`back` only when nothing is
- * behind), tappable ancestor crumbs that go up, and an optional `?` into help. There is no Save control —
- * the tree saves as you go (Plan 2). Back-navigation inherits the origin-zoom
- * collapse for free via the central NavTransitionOutlet.
+ * behind), tappable ancestor crumbs that go up, and an optional `?` into help.
+ * There is no Save control — the tree saves as you go (Plan 2). Back-navigation
+ * inherits the origin-zoom collapse for free via the central NavTransitionOutlet.
  */
 export function PageBar({ crumbs, back, onHelp, onNavigate }: PageBarProps): JSX.Element {
   const nav = useAppNav();

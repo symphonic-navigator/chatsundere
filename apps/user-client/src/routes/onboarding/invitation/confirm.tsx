@@ -24,7 +24,9 @@ import { PassphraseField } from '../../../components/PassphraseField.js';
 import { BackLink } from '../../../components/ui/BackLink.js';
 import { copy } from '../../../lib/copy.js';
 import { HttpError } from '../../../lib/fetch.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { httpServerClient } from '../../../lib/server-client.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { sanitiseUsernameInput, validateUsername } from '../../../lib/validators.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { resetEngineStateForNewLink } from '../../../sync/link-reset.js';
@@ -102,6 +104,8 @@ function InvitationConfirmGuarded() {
 
 function InvitationConfirmInner() {
   const navigate = useNavigate();
+  const nav = useAppNav();
+  const [params] = useSearchParams();
   const navTarget = useNavTarget();
   const onboardingState = useOnboardingStore((s) => s.state);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
@@ -239,7 +243,10 @@ function InvitationConfirmInner() {
         // sync cycle so the local vault backfills onto the newly-linked account.
         await resetEngineStateForNewLink();
         void runSyncCycle();
-        navigate('/app', { replace: true });
+        // Started from Server linking, the wizard returns there and leaves the
+        // history; the first run (no `?return=`) lands on the Hall.
+        if (params.get('return')) nav.returnTo(safeReturnPath(params.get('return'), '/app'));
+        else navigate('/app', { replace: true });
       } else {
         // Fresh-PWA: run start + finish in one go so the same passphrase is
         // used for both OPAQUE rounds (start must match finish).

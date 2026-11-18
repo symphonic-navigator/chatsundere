@@ -43,14 +43,38 @@ export function recordLocation(
   if (!known) {
     const state = historyStateFor(location.key);
     const idx = typeof state?.idx === 'number' ? state.idx : null;
-    const prev = current ? (trails.get(current.key)?.trail ?? []) : [];
+    const prevEntry = current ? trails.get(current.key) : undefined;
+    const prev = prevEntry?.trail ?? [];
+    // Two navigations in one batch skip rendering the entry between them; then the
+    // trail would miss it and a later `go(-k)` would land one page off. Where the
+    // router's idx shows that, the trail is dropped (empty only ever means "go up").
+    const prevIdx = prevEntry?.idx ?? null;
+    const skipped =
+      idx !== null &&
+      prevIdx !== null &&
+      ((type === 'PUSH' && idx !== prevIdx + 1) || (type === 'REPLACE' && idx !== prevIdx));
     const trail =
       type === 'POP' || !current
         ? nextTrail({ type: 'POP', stamp: state?.csTrail, idx })
-        : nextTrail({ type, prevTrail: prev, prevPathname: current.pathname, idx });
+        : skipped
+          ? []
+          : nextTrail({ type, prevTrail: prev, prevPathname: current.pathname, idx });
     trails.set(location.key, { trail, idx });
   }
   current = { key: location.key, pathname: location.pathname };
+  movingFrom = null;
+}
+
+// The entry a history traversal left from, until the next entry is shown: a second
+// move from the same entry (a double tap, an effect run twice) is ignored, so one
+// tap never skips a page.
+let movingFrom: string | null = null;
+
+/** Claim a traversal from the entry `key`; false when one is already under way. */
+export function claimTraversal(key: string): boolean {
+  if (movingFrom === key) return false;
+  movingFrom = key;
+  return true;
 }
 
 /** The trail of the entry `key`, empty when unknown. */
@@ -67,4 +91,5 @@ export function idxOf(key: string): number | null {
 export function resetNavTrailForTests(): void {
   trails.clear();
   current = null;
+  movingFrom = null;
 }
