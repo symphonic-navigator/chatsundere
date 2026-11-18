@@ -135,8 +135,8 @@ vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { MemoryRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
 import type { OAuthDiscovery } from '../../src/mcp/oauth/discovery.js';
 import { IntegrationServerPage } from '../../src/routes/app/integrations/server.js';
@@ -184,6 +184,58 @@ function wrapAt(path: string) {
           <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
           <Route path="/app/integrations" element={<div>integrations list</div>} />
           <Route path="/app/account/server-linking" element={<ServerLinkingStub />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+// Every pending check is settled before its test ends, passing or failing: a vi.fn
+// result left pending keeps the Vitest worker from finishing the file.
+const unsettled: Array<() => void> = [];
+afterEach(() => {
+  for (const settle of unsettled.splice(0)) settle();
+});
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  unsettled.push(() =>
+    resolve({ kind: 'unreachable', directOnly: false, error: '', cause: 'other' } as T),
+  );
+  return { promise, resolve };
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  const type = useNavigationType();
+  return (
+    <div>
+      <div data-testid="probe-state">{JSON.stringify(location.state ?? null)}</div>
+      <div data-testid="probe-search">{location.search}</div>
+      <div data-testid="probe-type">{type}</div>
+    </div>
+  );
+}
+
+/** Mounts *Add server* as the connector card's tap does: a `?return=` and navigation state. */
+function wrapAdd(state: unknown, search = '?return=%2Fapp%2Fchat%2Fc1') {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[{ pathname: '/app/integrations/new', search, state }]}>
+        <Routes>
+          <Route
+            path="/app/integrations/new"
+            element={
+              <>
+                <IntegrationServerPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/app/integrations" element={<div>integrations list</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -644,6 +696,214 @@ describe('IntegrationServerPage', () => {
       ).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Link a server' }));
       expect(await screen.findByText('server linking')).toBeTruthy();
+    });
+  });
+
+  describe('Add server: a link proposed in the chat', () => {
+    const SUGGESTED =
+      'Suggested in the chat. Check that kumbu.example is the server you want — it will receive what your companion sends to its tools.';
+    const DISCOVERY: OAuthDiscovery = {
+      kind: 'oauth',
+      resource: 'https://kumbu.example/mcp',
+      issuer: 'https://auth.kumbu.example',
+      resourceName: 'Kumbu',
+      authorizationEndpoint: 'https://auth.kumbu.example/authorize',
+      tokenEndpoint: 'https://auth.kumbu.example/token',
+      registrationEndpoint: null,
+      revocationEndpoint: null,
+      cimdSupported: true,
+      issParameterSupported: false,
+      viaProxy: false,
+      scope: null,
+    };
+    const SIGN_IN = {
+      kind: 'sign-in',
+      discovery: DISCOVERY,
+      route: 'proxy',
+      endpoint: 'https://kumbu.example/mcp',
+    };
+    const FAILED = { kind: 'unreachable', directOnly: false, error: 'Nope.', cause: 'other' };
+
+    it('prefills the link, checks it at once, and consumes the navigation state', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: ' https://Kumbu.example/mcp ' });
+
+      const field = screen.getByLabelText('Server link') as HTMLInputElement;
+      expect(field).toHaveValue('https://kumbu.example/mcp');
+      expect(field.readOnly).toBe(true);
+      expect(await screen.findByRole('button', { name: 'Checking kumbu.example…' })).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+      expect(checkServerMock).toHaveBeenCalledWith('https://kumbu.example/mcp', {
+        hasProxy: true,
+        allowDirect: false,
+      });
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(screen.getByTestId('probe-type')).toHaveTextContent('REPLACE');
+      expect(screen.getByTestId('probe-search')).toHaveTextContent('?return=%2Fapp%2Fchat%2Fc1');
+
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['an http link', 'http://kumbu.example/mcp'],
+      ['a private host', 'https://192.168.1.5/mcp'],
+      ['a non-string', 42],
+    ])('ignores %s and opens empty', (_label, proposedLink) => {
+      wrapAdd({ proposedLink });
+      expect(screen.getByLabelText('Server link')).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Check server' })).toBeDisabled();
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    it('lets useKeyFor win over a proposed link', () => {
+      wrapAdd({ useKeyFor: 'https://wiki.example/mcp', proposedLink: 'https://kumbu.example/mcp' });
+      expect(screen.getByLabelText('URL')).toHaveValue('https://wiki.example/mcp');
+      expect(screen.getByLabelText('Authentication')).toHaveValue('bearer');
+      expect(screen.getByLabelText('Name')).toHaveValue('');
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    it('opens an empty page for a ?return= without state', () => {
+      wrapAdd(null);
+      expect(screen.getByLabelText('Server link')).toHaveValue('');
+      expect(checkServerMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+    });
+
+    describe('Sign-in required after a proposal', () => {
+      it('repeats the line, keeps Trusted unticked, and holds prefix and Local network behind More settings', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        expect(await screen.findByText('Sign-in required')).toBeTruthy();
+        expect(screen.getByText(SUGGESTED)).toBeTruthy();
+        expect(screen.getByLabelText('Name')).toHaveValue('Kumbu');
+        expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+        expect(screen.queryByLabelText('Tool prefix')).toBeNull();
+        expect(screen.queryByRole('checkbox', { name: /Local network/ })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'More settings' }));
+        expect(screen.getByLabelText('Tool prefix')).toHaveValue('Kumbu');
+        expect(screen.getByRole('checkbox', { name: /Local network/ })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+      });
+
+      it('still hands the flow the hidden prefix and Local network', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        await screen.findByText('Sign-in required');
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        expect(flowProps.current?.draft).toMatchObject({
+          name: 'Kumbu',
+          prefix: 'Kumbu',
+          onByDefault: true,
+          autoRun: false,
+          allowDirect: false,
+        });
+      });
+
+      it('opens More settings again on return when a hidden setting was changed', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+        await screen.findByText('Sign-in required');
+        fireEvent.click(screen.getByRole('button', { name: 'More settings' }));
+        fireEvent.change(screen.getByLabelText('Tool prefix'), { target: { value: 'kb' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        act(() => (flowProps.current?.onClose as () => void)());
+        expect(await screen.findByLabelText('Tool prefix')).toHaveValue('kb');
+        expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      });
+
+      it('shows no More settings without a proposal', async () => {
+        checkServerMock.mockResolvedValue(SIGN_IN);
+        wrapAt('/app/integrations/new');
+        fireEvent.change(screen.getByLabelText('Server link'), {
+          target: { value: 'https://kumbu.example/mcp' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+        await screen.findByText('Sign-in required');
+        expect(screen.getByLabelText('Tool prefix')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+        expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      });
+    });
+
+    it('drops the line, here and on the next screen, once the link is edited after a failure', async () => {
+      checkServerMock.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(SIGN_IN);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByText('Nope.')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('Server link'), {
+        target: { value: 'https://kumbu.example/mcp/' },
+      });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      expect(screen.getByLabelText('Tool prefix')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+    });
+
+    it('keeps the line after Try again without an edit', async () => {
+      checkServerMock.mockResolvedValueOnce(FAILED).mockResolvedValueOnce(SIGN_IN);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+    });
+
+    it('seeds the key form with the host as name and On by default ticked', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByLabelText('Key')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('kumbu.example');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+    });
+
+    it('seeds the open-server form the same way', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'open',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+        tools: [{ name: 'lookup', description: 'Look up', inputSchema: {} }],
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      expect(await screen.findByText('lookup')).toBeTruthy();
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('kumbu.example');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /Trusted/ })).not.toBeChecked();
+    });
+
+    it('leaves the key form unseeded without a proposal', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAt('/app/integrations/new');
+      fireEvent.change(screen.getByLabelText('Server link'), {
+        target: { value: 'https://kumbu.example/mcp' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Check server' }));
+      expect(await screen.findByLabelText('Key')).toBeTruthy();
+      expect(screen.getByLabelText('Name')).toHaveValue('');
+      expect(screen.getByRole('checkbox', { name: 'On by default' })).not.toBeChecked();
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
     });
   });
 

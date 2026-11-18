@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import type { McpServerRow } from '../../../boot/client-data-db.js';
-import { CheckServerStep } from '../../../components/mcp/CheckServerStep.js';
+import { CheckServerStep, SuggestedInChat } from '../../../components/mcp/CheckServerStep.js';
 import { OAuthConnectionPanel } from '../../../components/mcp/OAuthConnectionPanel.js';
 import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
 import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
@@ -50,6 +50,7 @@ import type {
 import { toastStore } from '../../../state/toast.store.js';
 import { SyncOfflineError } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { normaliseConnectorLink } from '../../../tools/connector-link.js';
 
 type AuthScheme = 'none' | 'bearer' | 'header';
 type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
@@ -117,7 +118,24 @@ type FormSeed = {
   /** An open server keeps its auth fields behind a visible *Add a key*. */
   authBehindButton?: boolean;
   dirty?: boolean;
+  /** Starting name; after a link proposed in the chat, its host. */
+  name?: string;
+  /** Starting *On by default*; ticked after a link proposed in the chat. */
+  onByDefault?: boolean;
+  /** The host of a link proposed in the chat, named above the form. */
+  suggestedHost?: string;
 };
+
+/** A link the connector card handed over in navigation state, re-validated (spec §5.2). */
+type FromChat = { url: string; host: string };
+
+function readProposedLink(state: unknown): FromChat | null {
+  const s = state as { useKeyFor?: unknown; proposedLink?: unknown } | null;
+  // *Use a key instead* and the card are different callers; the key wins.
+  if (typeof s?.useKeyFor === 'string' || typeof s?.proposedLink !== 'string') return null;
+  const checked = normaliseConnectorLink(s.proposedLink);
+  return checked.ok ? { url: checked.url, host: checked.host } : null;
+}
 
 type AddPhase =
   | { kind: 'check' }
@@ -147,9 +165,24 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
       ? { kind: 'form', seed: { url: keyFor, authScheme: 'bearer' } }
       : { kind: 'check' },
   );
-  const [link, setLink] = useState('');
+  // Kept here, not in history: the state is consumed below, and an edit of the link drops it.
+  const [fromChat, setFromChat] = useState<FromChat | null>(() => readProposedLink(location.state));
+  const [link, setLink] = useState(fromChat?.url ?? '');
+
+  // Consumed at once, so a reload or Back/Forward into this entry never re-runs the check.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on arrival only.
+  useEffect(() => {
+    const proposed = (location.state as { proposedLink?: unknown } | null)?.proposedLink;
+    if (proposed !== undefined && typeof keyFor !== 'string') {
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, []);
 
   if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} />;
+
+  // The form that follows a proposal starts named after the host, and on by default (§5.3).
+  const proposalSeed = (): Partial<FormSeed> =>
+    fromChat ? { name: fromChat.host, onByDefault: true, suggestedHost: fromChat.host } : {};
 
   function onResult(result: Exclude<CheckResult, { kind: 'unreachable' }>, checked: string) {
     setLink(checked);
@@ -157,11 +190,15 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
     if (result.kind === 'sign-in') {
       setPhase({ kind: 'sign-in', check: result });
     } else if (result.kind === 'key') {
-      setPhase({ kind: 'form', seed: { url: result.endpoint, authScheme: 'bearer', allowDirect } });
+      setPhase({
+        kind: 'form',
+        seed: { url: result.endpoint, authScheme: 'bearer', allowDirect, ...proposalSeed() },
+      });
     } else {
       setPhase({
         kind: 'form',
         seed: {
+          ...proposalSeed(),
           url: result.endpoint,
           allowDirect,
           routing: result.route,
@@ -203,8 +240,13 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
           <CheckServerStep
             hasProxy={hasProxy}
             initialLink={link}
+            autoCheck={fromChat !== null}
+            suggestedHost={fromChat?.host ?? null}
+            onLinkEdited={() => setFromChat(null)}
             onResult={onResult}
-            onManual={(typed) => setPhase({ kind: 'form', seed: { url: typed } })}
+            onManual={(typed) =>
+              setPhase({ kind: 'form', seed: { url: typed, ...proposalSeed() } })
+            }
           />
         ) : null}
         {phase.kind === 'sign-in' ? (
@@ -212,6 +254,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
             check={phase.check}
             rows={rows}
             initial={phase.draft}
+            suggestedHost={fromChat?.host ?? null}
             onNext={(draft) =>
               setPhase({
                 kind: 'flow',
@@ -221,7 +264,10 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
               })
             }
             onUseKey={() =>
-              setPhase({ kind: 'form', seed: { url: phase.check.endpoint, authScheme: 'bearer' } })
+              setPhase({
+                kind: 'form',
+                seed: { url: phase.check.endpoint, authScheme: 'bearer', ...proposalSeed() },
+              })
             }
             onOpenExisting={(id) => navigate(`/app/integrations/${id}`)}
           />
@@ -233,7 +279,10 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
             mode="page"
             onConnected={(r) => onConnected(r.serverId, r.draft)}
             onUseKey={() =>
-              setPhase({ kind: 'form', seed: { url: phase.draft.url, authScheme: 'bearer' } })
+              setPhase({
+                kind: 'form',
+                seed: { url: phase.draft.url, authScheme: 'bearer', ...proposalSeed() },
+              })
             }
             onClose={() => setPhase(phase.back)}
           />
@@ -260,7 +309,7 @@ function IntegrationServerForm({
   // An OAuth row has no secret here; its grant is its own synced row (spec §4.2).
   const isOAuth = existing?.auth?.scheme === 'oauth';
 
-  const [name, setName] = useState(existing?.name ?? '');
+  const [name, setName] = useState(existing?.name ?? seed?.name ?? '');
   const [url, setUrl] = useState(existing?.url ?? seed?.url ?? '');
   const [prefix, setPrefix] = useState(existing?.prefix ?? '');
   const [prefixEdited, setPrefixEdited] = useState(existing != null);
@@ -274,7 +323,9 @@ function IntegrationServerForm({
     existing?.auth?.scheme === 'header' ? existing.auth.headerName : '',
   );
   const [keyInput, setKeyInput] = useState('');
-  const [onByDefault, setOnByDefault] = useState(existing?.onByDefault ?? false);
+  const [onByDefault, setOnByDefault] = useState(
+    existing?.onByDefault ?? seed?.onByDefault ?? false,
+  );
   const [autoRun, setAutoRun] = useState(existing?.autoRun ?? false);
   const [allowDirect, setAllowDirect] = useState(
     existing?.allowDirect ?? seed?.allowDirect ?? false,
@@ -613,6 +664,7 @@ function IntegrationServerForm({
             onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
           />
         ) : null}
+        {seed?.suggestedHost && !existing ? <SuggestedInChat host={seed.suggestedHost} /> : null}
         {existing && offerLinking ? (
           <Button
             tone="primary"

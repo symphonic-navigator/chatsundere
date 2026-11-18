@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type CheckResult, checkServer } from '../../mcp/oauth/check-server.js';
 import { Button } from '../ui/Button.js';
+import { hostOf } from './sign-in-copy.js';
 
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
@@ -13,6 +14,24 @@ const NOT_REACHED = "Couldn't reach this server.";
 const RELAY_DOWN = "Couldn't reach your Chatsundere server right now. Try again shortly.";
 
 type Unreachable = Extract<CheckResult, { kind: 'unreachable' }>;
+
+/** The line that names the host of a link the companion proposed (spec §5.2). */
+export function SuggestedInChat(props: { host: string }): JSX.Element {
+  return (
+    <p className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper">
+      {`Suggested in the chat. Check that ${props.host} is the server you want — it will receive what your companion sends to its tools.`}
+    </p>
+  );
+}
+
+/** The host a check contacts, also for a link typed without `https://`. */
+function hostOfTyped(link: string): string {
+  try {
+    return new URL(link).host;
+  } catch {
+    return hostOf(`https://${link}`);
+  }
+}
 
 /**
  * Says why a check failed. Only a failed probe gets the "Couldn't reach" sentence; a
@@ -49,24 +68,39 @@ function FailureMessage(props: {
 
 /**
  * The first screen of *Add server* (spec §9 "Connect"): the link and *Check server*.
- * Everything else appears after the check; *Enter details manually* skips it.
+ * Everything else appears after the check; *Enter details manually* skips it. With
+ * `autoCheck` the initial link is checked once on mount (a link proposed in the chat).
  */
 export function CheckServerStep(props: {
   hasProxy: boolean;
   initialLink?: string;
+  autoCheck?: boolean;
+  suggestedHost?: string | null;
+  onLinkEdited?: () => void;
   onResult: (result: Exclude<CheckResult, Unreachable>, link: string) => void;
   onManual: (link: string) => void;
 }): JSX.Element {
   const navigate = useNavigate();
   const linked = useAccountLinkStore((s) => s.linkStatus === 'linked');
   const [link, setLink] = useState(props.initialLink ?? '');
-  const [checking, setChecking] = useState(false);
+  // The host of the link being checked; null while no check runs.
+  const [checking, setChecking] = useState<string | null>(null);
   const [failure, setFailure] = useState<Unreachable | null>(null);
+  const [edited, setEdited] = useState(false);
+  // A ref, not state: StrictMode runs mount effects twice, and the check must run once.
+  const autoChecked = useRef(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, on mount only.
+  useEffect(() => {
+    if (!props.autoCheck || autoChecked.current) return;
+    autoChecked.current = true;
+    void onCheck();
+  }, []);
 
   async function onCheck(): Promise<void> {
     const target = link.trim();
     if (!target) return;
-    setChecking(true);
+    setChecking(hostOfTyped(target));
     setFailure(null);
     try {
       // The Local network toggle lives in the manual path, so the check never asks for it.
@@ -76,12 +110,13 @@ export function CheckServerStep(props: {
     } catch {
       setFailure({ kind: 'unreachable', directOnly: !props.hasProxy, error: '', cause: 'probe' });
     } finally {
-      setChecking(false);
+      setChecking(null);
     }
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {props.suggestedHost && !edited ? <SuggestedInChat host={props.suggestedHost} /> : null}
       <div>
         <label
           htmlFor="mcp-link"
@@ -95,9 +130,14 @@ export function CheckServerStep(props: {
           inputMode="url"
           placeholder="https://example.com/mcp"
           value={link}
+          readOnly={checking !== null}
           onChange={(e) => {
             setLink(e.target.value);
             setFailure(null);
+            if (!edited) {
+              setEdited(true);
+              props.onLinkEdited?.();
+            }
           }}
           autoComplete="off"
           autoCapitalize="off"
@@ -106,8 +146,12 @@ export function CheckServerStep(props: {
         />
       </div>
 
-      <Button tone="primary" disabled={!link.trim() || checking} onClick={() => void onCheck()}>
-        {checking ? 'Checking…' : 'Check server'}
+      <Button
+        tone="primary"
+        disabled={!link.trim() || checking !== null}
+        onClick={() => void onCheck()}
+      >
+        {checking !== null ? `Checking ${checking}…` : 'Check server'}
       </Button>
 
       {failure ? (
