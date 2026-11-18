@@ -3,6 +3,7 @@ import type { Tool, ToolProgress, ToolResult } from '../tools/types.js';
 import { type McpCallResult, mcpToolsCall } from './mcp-client.js';
 import type { EnsureResult } from './oauth/ensure-token.js';
 import { canonicalResource } from './oauth/url.js';
+import { MCP_REDIRECT_DETAIL, mcpRedirectToolError } from './redirect-copy.js';
 import { buildMcpToolNames } from './tool-naming.js';
 import type {
   McpAuthResolved,
@@ -52,6 +53,12 @@ export interface McpAuthNotice {
   serverName: string;
   variant: 'dead' | 'held' | 'waiting' | 'scope';
   scope?: string;
+}
+
+/** The chat notice a call whose server answered with a redirect carries; names only. */
+export interface McpRedirectNotice {
+  serverId: string;
+  serverName: string;
 }
 
 /** Per-send MCP context: the active servers plus the key opener and approval hook. */
@@ -138,6 +145,15 @@ function scrub(message: string, secrets: ReadonlyArray<string | null>): string {
 }
 
 const fail = (error: string): ToolResult => ({ ok: false, output: '', error });
+
+/**
+ * The constant result of a call whose server answered with a redirect. It bypasses the
+ * scrubber on purpose: it holds the server's name and fixed words, never a credential.
+ */
+function redirected(server: McpActiveServer): ToolResult {
+  const mcpRedirect: McpRedirectNotice = { serverId: server.id, serverName: server.name };
+  return { ok: false, output: '', error: mcpRedirectToolError(server.name), meta: { mcpRedirect } };
+}
 
 /** Build the active MCP tools for this send. Mirrors `contributeKnowledgeTools`. */
 export function contributeMcpTools(ctx: McpToolContext): Tool[] {
@@ -322,6 +338,7 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
               if (oauth && route.auth === 'insufficient-scope') {
                 return notice(server, 'scope', route.scope);
               }
+              if (route.error === MCP_REDIRECT_DETAIL) return redirected(server);
               return fail(scrub(`Could not connect to ${server.name}: ${route.error}`, secrets));
             }
             // The chokepoint at the point of sending: a token goes to the server's own URL only.
@@ -348,6 +365,7 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
               continue;
             }
             if (oauth && r.auth === 'insufficient-scope') return notice(server, 'scope', r.scope);
+            if (r.redirect) return redirected(server);
             if (r.error) return fail(scrub(r.error, secrets));
             return { ok: true, output: r.stdout, error: null };
           }

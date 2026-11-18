@@ -640,6 +640,28 @@ describe('redirects (spec §6.3)', () => {
     expect((err as Error).message).toBe(MCP_REDIRECT_DETAIL);
   });
 
+  it('a tool call whose initialise meets a redirect comes out marked as a redirect', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(opaqueRedirect());
+    const r = await mcpToolsCall({ ...directEndpoint, auth: null }, 'search', {});
+    expect(r).toEqual({ stdout: '', error: MCP_REDIRECT_DETAIL, redirect: true });
+  });
+
+  it('a tool call whose tools/call request meets a redirect comes out marked as a redirect', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(initOk())
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(opaqueRedirect());
+    const r = await mcpToolsCall(directEndpoint, 'search', {});
+    expect(r).toEqual({ stdout: '', error: MCP_REDIRECT_DETAIL, redirect: true });
+  });
+
+  it('a tool call that fails to reach the server is not marked as a redirect', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const r = await mcpToolsCall(directEndpoint, 'search', {});
+    expect(r.redirect).toBeUndefined();
+    expect(r.error).toContain('Failed to fetch');
+  });
+
   it('a network failure stays a TypeError, never a redirect error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const err = await mcpToolsList({ ...directEndpoint, auth: null }).catch((e: unknown) => e);

@@ -306,6 +306,8 @@ export interface McpCallResult {
   error: string | null;
   auth?: 'required' | 'insufficient-scope';
   scope?: string;
+  /** Set when the server answered with a redirect, which is never followed. */
+  redirect?: true;
 }
 
 function authResult(
@@ -341,6 +343,7 @@ export async function mcpToolsCall(
   } catch (e) {
     if (e instanceof McpAuthRequiredError) return authResult(e.message, e.status, e.challenge);
     if (e instanceof McpProxySessionError) return { stdout: '', error: e.message };
+    if (e instanceof McpRedirectError) return { stdout: '', error: e.message, redirect: true };
     if (e instanceof DOMException && e.name === 'TimeoutError')
       return { stdout: '', error: `MCP server timed out after ${timeoutMs}ms` };
     return {
@@ -379,6 +382,7 @@ export async function mcpToolsCall(
   } catch (e) {
     if (e instanceof McpAuthRequiredError) return authResult(e.message, e.status, e.challenge);
     if (e instanceof McpProxySessionError) return { stdout: '', error: e.message };
+    if (e instanceof McpRedirectError) return { stdout: '', error: e.message, redirect: true };
     if (e instanceof DOMException && e.name === 'TimeoutError')
       return { stdout: '', error: `MCP server timed out after ${timeoutMs}ms` };
     return {

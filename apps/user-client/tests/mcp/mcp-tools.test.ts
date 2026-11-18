@@ -6,6 +6,7 @@ import {
   type McpToolContext,
   contributeMcpTools,
 } from '../../src/mcp/mcp-tools.js';
+import { MCP_REDIRECT_DETAIL } from '../../src/mcp/redirect-copy.js';
 
 vi.mock('../../src/mcp/mcp-client.js', () => ({
   mcpToolsCall: vi.fn(async (_e: unknown, name: string) => ({
@@ -595,5 +596,73 @@ describe('fix round 1: parallel calls and non-OAuth rows', () => {
     })?.execute({});
     expect(r?.ok).toBe(false);
     expect(r?.meta).toBeUndefined();
+  });
+});
+
+describe('a server that answers with a redirect (spec §6.3)', () => {
+  const REDIRECT_RESULT = {
+    ok: false,
+    output: '',
+    error:
+      "Keyed answered with a redirect, which Chatsundere doesn't follow. Tell the user to open the server in My Integrations and enter its final link; do not retry this tool in this turn.",
+    meta: { mcpRedirect: { serverId: 'k', serverName: 'Keyed' } },
+  };
+  const redirected = () =>
+    vi.mocked(mcpToolsCall).mockResolvedValue({
+      stdout: '',
+      error: MCP_REDIRECT_DETAIL,
+      redirect: true,
+    });
+
+  it('returns the constant result with the redirect notice', async () => {
+    redirected();
+    const r = await one(keyServer({ hasConsent: true }))?.execute({});
+    expect(r).toEqual(REDIRECT_RESULT);
+  });
+
+  it('is not altered by the scrubber, even when the key appears in the sentence', async () => {
+    redirected();
+    const r = await one(keyServer({ hasConsent: true }), {
+      getServerKey: async () => 'redirect',
+    })?.execute({});
+    expect(r).toEqual(REDIRECT_RESULT);
+  });
+
+  it('is the same for every call, so it replays byte-identically', async () => {
+    redirected();
+    const tool = one(keyServer({ hasConsent: true }));
+    const first = await tool?.execute({});
+    const second = await tool?.execute({});
+    expect(second).toEqual(first);
+    expect(second).toEqual(REDIRECT_RESULT);
+  });
+
+  it('also comes from a route probe that ended in a redirect', async () => {
+    const r = await one(keyServer({ hasConsent: true, routing: null, resolvedEndpoint: null }), {
+      resolveRoute: async () => ({ ok: false, error: MCP_REDIRECT_DETAIL }),
+    })?.execute({});
+    expect(r).toEqual(REDIRECT_RESULT);
+    expect(mcpToolsCall).not.toHaveBeenCalled();
+  });
+
+  it('comes from an OAuth server too', async () => {
+    redirected();
+    const r = await one(oauthServer(), {
+      getOAuthToken: async () => ({ ok: true, accessToken: 'at-1' }),
+    })?.execute({});
+    expect(r?.meta).toEqual({ mcpRedirect: { serverId: 'o', serverName: 'Kumbu' } });
+    expect(r?.error).toMatch(/^Kumbu answered with a redirect/);
+  });
+
+  it('leaves the server and its tools as they were', async () => {
+    redirected();
+    const server = keyServer({ hasConsent: true });
+    const before = structuredClone(server);
+    const tools = contributeMcpTools(ctx({ servers: [server] }));
+    await tools[0]?.execute({});
+    expect(server).toEqual(before);
+    expect(contributeMcpTools(ctx({ servers: [server] })).map((t) => t.name)).toEqual(
+      tools.map((t) => t.name),
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { PillRow } from '../../../src/boot/client-data-db.js';
 import { Pill } from '../../../src/components/chat/Pill.js';
@@ -126,5 +127,54 @@ describe('Pill — condensation slot', () => {
     render(<Pill row={longPill()} />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.queryByText('Full result')).toBeNull();
+  });
+});
+
+describe('Pill — MCP redirect notice', () => {
+  function redirectPill(mcpRedirect: unknown): PillRow {
+    return {
+      id: 'p9',
+      messageId: 'm9',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'failed',
+      payload: {
+        name: 'docs_search',
+        argumentsJson: '{}',
+        error: 'Docs answered with a redirect.',
+        mcpRedirect,
+      },
+      createdAt: 9,
+    };
+  }
+  const showAt = (row: PillRow) =>
+    render(
+      <MemoryRouter initialEntries={['/app/chat/c1?persona=p1']}>
+        <Pill row={row} />
+      </MemoryRouter>,
+    );
+
+  it('says the server redirected and links to its page with the chat as return', () => {
+    showAt(redirectPill({ serverId: 's/1', serverName: 'Docs' }));
+    expect(
+      screen.getByText("Docs answered with a redirect, which Chatsundere doesn't follow."),
+    ).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open Docs' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/app/integrations/${encodeURIComponent('s/1')}?return=${encodeURIComponent('/app/chat/c1?persona=p1')}`,
+    );
+  });
+
+  it.each([
+    ['a number for the id', { serverId: 1, serverName: 'Docs' }],
+    ['a missing name', { serverId: 's1' }],
+    ['an object for the name', { serverId: 's1', serverName: { x: 1 } }],
+    ['a string instead of an object', 'Docs'],
+    ['null', null],
+  ])('renders nothing for a malformed notice (%s)', (_label, payload) => {
+    showAt(redirectPill(payload));
+    expect(screen.queryByText(/answered with a redirect, which/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

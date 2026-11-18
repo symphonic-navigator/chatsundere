@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
 import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
+import { McpRedirectNotice, readMcpRedirectNotice } from '../mcp/McpRedirectNotice.js';
 import { ArtefactPill } from './ArtefactPill.js';
 import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
 import { ExpertPill } from './ExpertPill.js';
@@ -35,6 +36,8 @@ interface PillPayloadShape {
   phase?: string;
   /** Set by a failed MCP OAuth call; holds names only, never a token. */
   mcpAuth?: McpAuthNoticePayload;
+  /** Set by an MCP call whose server answered with a redirect; unchecked until read. */
+  mcpRedirect?: unknown;
 }
 
 function labelFor(row: PillRow): string {
@@ -124,6 +127,7 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
     (row.kind === 'tool-call' && (!!codeOf(payload) || !!payload?.result || !!payload?.error)) ||
     (isLore && (payload?.entries?.length ?? 0) > 0);
   const code = codeOf(payload);
+  const redirectNotice = readMcpRedirectNotice(payload?.mcpRedirect);
 
   return (
     <span className="pill-wrap">
@@ -143,6 +147,7 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
         <output className="pill-notice">Renewing access…</output>
       )}
       {payload?.mcpAuth && <McpAuthNotice notice={payload.mcpAuth} />}
+      {redirectNotice && <McpRedirectNotice notice={redirectNotice} />}
       {expandable && expanded && (
         <span className="pill-detail">
           {isLore ? (
