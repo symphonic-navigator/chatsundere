@@ -52,7 +52,7 @@ export function PersonaFilterDropdown({ personas, selectedId, onChange }: Props)
         aria-label="Filter by persona"
         aria-haspopup="true"
         aria-expanded={open}
-        className="persona-dropdown-trigger"
+        className="persona-dropdown-trigger cs-tap-44"
         onClick={() => setOpen((o) => !o)}
       >
         <span className="persona-dropdown-value">

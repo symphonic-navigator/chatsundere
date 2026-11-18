@@ -53,7 +53,7 @@ export function MindspacePicker(props: Props): JSX.Element {
   const surfaceRaised = selectedMs?.palette.surfaceRaised;
 
   return (
-    <div className="rounded-lg border border-white/5 bg-black/20 p-3">
+    <div className="mindspace-picker rounded-lg border border-white/5 bg-black/20 p-3">
       {/* Preview card */}
       <div
         data-mindspace-preview
@@ -84,7 +84,7 @@ export function MindspacePicker(props: Props): JSX.Element {
             type="button"
             aria-label={`Mindspace ${m.displayName}`}
             onClick={() => onMindspaceChange(m.id)}
-            className={`h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-black ${
+            className={`cs-hit h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-black ${
               selectedMindspaceId === m.id ? 'ring-paper' : 'ring-transparent'
             }`}
             style={{ background: m.palette.accent }}
@@ -95,7 +95,7 @@ export function MindspacePicker(props: Props): JSX.Element {
             type="button"
             aria-label="Use user default"
             onClick={() => onMindspaceChange(null)}
-            className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
+            className={`cs-hit rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
               selectedMindspaceId === null
                 ? 'border-paper text-paper'
                 : 'border-paper-soft/40 text-paper-soft'
@@ -160,7 +160,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
+      className={`cs-hit rounded-full border px-3 py-1 text-xs uppercase tracking-wider ${
         active ? 'border-paper text-paper' : 'border-paper-soft/40 text-paper-soft'
       } ${className}`}
     >

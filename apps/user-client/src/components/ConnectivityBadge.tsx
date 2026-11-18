@@ -91,6 +91,7 @@ export function ConnectivityBadge({ minimal = false }: { minimal?: boolean } = {
     <span className="relative inline-flex">
       <button
         type="button"
+        className="connectivity-badge"
         aria-expanded={expanded}
         aria-label={`Connectivity: ${text}`}
         onClick={() => setExpanded((v) => !v)}

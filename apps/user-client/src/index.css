@@ -5811,7 +5811,18 @@ h1 {
   .document-picker-close,
   .treasury-sheet-close,
   .lightbox-x,
-  button[aria-label^="Connectivity:"] {
+  .connectivity-badge,
+  .hamburger-btn,
+  .topbar-avatar-btn,
+  .topbar-title-btn,
+  .context-gauge,
+  .ctrl-btn,
+  .toc-entry-rename,
+  .toc-entry-star,
+  .treasury-row-star,
+  .cs-pill,
+  .cs-overflow-trigger-labelled,
+  .dual-action-btn {
     position: relative;
   }
 }
@@ -5822,7 +5833,20 @@ h1 {
 .cs-setup-step::before,
 a.brand-logo::before,
 .adult-mode-toggle::after,
-button[aria-label^="Connectivity:"]::before,
+.connectivity-badge::before,
+button.brand-logo::before,
+.hamburger-btn::before,
+.topbar-avatar-btn::before,
+.topbar-title-btn::before,
+.context-gauge::before,
+.scroll-to-end::before,
+.ctrl-btn::before,
+.toc-entry-rename::before,
+.toc-entry-star::before,
+.treasury-row-star::before,
+.cs-pill::before,
+.cs-overflow-trigger-labelled::before,
+.dual-action-btn::before,
 .artefact-picker-close::before,
 .document-picker-close::before,
 .treasury-sheet-close::before,
@@ -5956,4 +5980,44 @@ input[type="range"] {
    goes, so fast repeated taps on the composer or Skip never zoom by accident. */
 html {
   touch-action: manipulation;
+}
+
+/* Standalone action buttons that paint a box grow visibly to the height of
+   .cs-btn (Chris's Q1); compact controls in dense rows keep their look and take
+   .cs-hit instead. A <button> centres its content vertically by itself; a link
+   given this class also needs flex and items-center. */
+.cs-tap-44 {
+  min-height: 2.75rem;
+}
+
+/* A pill's remove × is a child of the pill: positioned, it paints and is
+   hit-tested above the pill's own hit area instead of being swallowed by it. */
+.cs-pill-x {
+  position: relative;
+}
+
+/* Message controls sit 0.25rem apart and wrap onto more rows, the stream-
+   interrupted actions 0.4rem: each control takes half of the smaller gap on
+   every side. */
+.ctrl-btn::before {
+  inset: -2px;
+  width: auto;
+  height: auto;
+}
+
+/* The mindspace picker's swatches and pills sit 0.5rem apart in wrapping rows
+   0.5rem apart: half the gap on every side (swatches 36 × 36, pills 34 high). */
+.mindspace-picker .cs-hit::before {
+  inset: -4px;
+  width: auto;
+  height: auto;
+}
+
+/* The provider page's show-key eye sits 0.5rem right of the key field, inside
+   the field's frame: towards the field half the gap, the rest of the 44 px
+   rightwards over the frame's padding and the page gutter. */
+.provider-key-eye::before {
+  inset: -10px -30px -10px -4px;
+  width: auto;
+  height: auto;
 }

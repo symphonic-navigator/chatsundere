@@ -601,7 +601,7 @@ export function PersonaHub(): JSX.Element {
           <button
             type="button"
             onClick={() => setShowThirdPartyImport(true)}
-            className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+            className="cs-tap-44 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
           >
             Import chats from ChatGPT or Grok…
           </button>

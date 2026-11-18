@@ -55,7 +55,7 @@ export function TtiModelSelect({
                 setExplained(null);
                 onTapFamily(f);
               }}
-              className={`rounded-md border px-3 py-2 text-left text-sm disabled:opacity-50 ${
+              className={`cs-hit rounded-md border px-3 py-2 text-left text-sm disabled:opacity-50 ${
                 f.selected
                   ? 'border-paper/40 bg-white/[0.08] text-paper'
                   : 'border-white/5 bg-white/[0.02] text-paper-soft hover:bg-white/[0.04]'

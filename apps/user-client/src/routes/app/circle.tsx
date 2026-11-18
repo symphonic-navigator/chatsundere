@@ -180,7 +180,7 @@ export function Circle(): JSX.Element {
                 <button
                   type="button"
                   disabled={!hasProvider}
-                  className="rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper hover:border-paper disabled:opacity-40"
+                  className="cs-tap-44 rounded-md border border-paper-soft/30 px-3 py-1 text-xs uppercase tracking-wider text-paper hover:border-paper disabled:opacity-40"
                   onClick={() =>
                     navigate(
                       lastChatId ? `/app/chat/${lastChatId}` : `/app/chat/new?personaId=${p.id}`,

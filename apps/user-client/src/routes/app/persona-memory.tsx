@@ -389,6 +389,7 @@ export function PersonaMemory(): JSX.Element {
           <div className="memory-page-actions">
             <button
               type="button"
+              className="cs-tap-44"
               disabled={visibleCommitted.length < 1 || consolidateState.status === 'pending'}
               title={
                 visibleCommitted.length < 1
@@ -412,7 +413,11 @@ export function PersonaMemory(): JSX.Element {
                     <>
                       <div className="memory-page-action-error" role="alert">
                         <span>{memoryErrorCopy(consolidateState)}</span>
-                        <button type="button" onClick={() => void consolidateNow()}>
+                        <button
+                          type="button"
+                          className="cs-tap-44"
+                          onClick={() => void consolidateNow()}
+                        >
                           Retry
                         </button>
                       </div>
@@ -445,7 +450,7 @@ export function PersonaMemory(): JSX.Element {
           />
           <button
             type="button"
-            className="memory-page-save-body"
+            className="memory-page-save-body cs-tap-44"
             disabled={
               class2.disabled ||
               bodyDraft.trim() === '' ||

@@ -110,7 +110,7 @@ export function SettingsProvidersPage(): JSX.Element {
         <button
           type="button"
           onClick={() => setPicking(true)}
-          className="rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
+          className="cs-tap-44 rounded-md border border-dashed border-white/15 px-3 py-2 text-xs uppercase tracking-wider text-paper-soft hover:border-paper hover:text-paper"
         >
           + Add provider
         </button>
