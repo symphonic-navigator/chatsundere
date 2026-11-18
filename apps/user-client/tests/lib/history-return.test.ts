@@ -4,6 +4,7 @@ import { type AppSession, useSessionStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
+import { NavigationType } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetClientDataDbForTests, openClientDataDb } from '../../src/boot/client-data-db.js';
 import { useAdultMode, useUpdateSettings } from '../../src/data/settings.js';
@@ -215,8 +216,8 @@ describe('history-return', () => {
     // A reload empties the memory-only return target, but the trail of the chat's
     // history entry (in history.state) still says History sits directly behind it.
     resetNavTrailForTests();
-    recordLocation({ key: 'h', pathname: '/app/history' }, 'POP');
-    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, 'PUSH');
+    recordLocation({ key: 'h', pathname: '/app/history' }, NavigationType.Pop);
+    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, NavigationType.Push);
     clearHistoryReturn();
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
     const nav = vi.fn();
@@ -229,9 +230,9 @@ describe('history-return', () => {
 
   it('goHistory opens a fresh visit when History is not directly behind', () => {
     resetNavTrailForTests();
-    recordLocation({ key: 'h', pathname: '/app/history' }, 'POP');
-    recordLocation({ key: 'x', pathname: '/app/persona/p1' }, 'PUSH');
-    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, 'PUSH');
+    recordLocation({ key: 'h', pathname: '/app/history' }, NavigationType.Pop);
+    recordLocation({ key: 'x', pathname: '/app/persona/p1' }, NavigationType.Push);
+    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, NavigationType.Push);
     clearHistoryReturn();
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
     const nav = vi.fn();
