@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import 'fake-indexeddb/auto';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetClientDataDbForTests,
@@ -40,6 +40,12 @@ function mockMemoryActions(
   });
 }
 
+/** Records the location's query string so a test can read where a link went. */
+function SearchSentinel({ testId }: { testId: string }) {
+  const { search } = useLocation();
+  return <div data-testid={testId} data-search={search} />;
+}
+
 function renderPage({ chat }: { chat?: string } = {}) {
   return setup(chat ? `/app/persona/p1/memory?chat=${chat}` : '/app/persona/p1/memory');
 }
@@ -57,6 +63,11 @@ function setup(initialPath: string) {
           />
           <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel">chat</div>} />
           <Route path="/app/chat/new" element={<div data-testid="lazy-chat-sentinel" />} />
+          <Route path="/login" element={<SearchSentinel testId="login-sentinel" />} />
+          <Route
+            path="/app/settings/providers/:templateId"
+            element={<SearchSentinel testId="provider-sentinel" />}
+          />
         </Routes>
       </MemoryRouter>
       <Toast />
@@ -308,6 +319,54 @@ describe('PersonaMemory — action error copy', () => {
         'Consolidated some of them — the rest are still below. Try again to finish.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('no-credentials: Enter passphrase comes first, Retry second, returning here', async () => {
+    const consolidateNow = vi.fn();
+    mockMemoryActions({
+      consolidateState: { status: 'error', error: 'no-credentials', partialSlices: 1 },
+      consolidateNow,
+    });
+    setup('/app/persona/p1/memory?chat=c1');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Chatsundere needs your passphrase once more before it can use your keys.',
+    );
+    expect(
+      within(alert)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Enter passphrase', 'Retry']);
+    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(consolidateNow).toHaveBeenCalled();
+    await userEvent.click(within(alert).getByRole('button', { name: 'Enter passphrase' }));
+    const login = await screen.findByTestId('login-sentinel');
+    expect(login.dataset.search).toBe(
+      `?return=${encodeURIComponent('/app/persona/p1/memory?chat=c1')}&need=passphrase`,
+    );
+  });
+
+  it('key-locked: the key sentence with Re-enter key to the provider page, and no Retry', async () => {
+    mockMemoryActions({
+      consolidateState: {
+        status: 'error',
+        error: 'key-locked',
+        lockedKey: { templateId: 'nano-gpt', providerName: 'NanoGPT' },
+      },
+    });
+    setup('/app/persona/p1/memory?chat=c1');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      "Your saved key for NanoGPT can't be opened any more. Enter it again to carry on.",
+    );
+    expect(alert).not.toHaveTextContent(/keep chatting/);
+    expect(within(alert).queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(within(alert).queryByRole('button', { name: 'Try again' })).toBeNull();
+    await userEvent.click(within(alert).getByRole('button', { name: 'Re-enter key' }));
+    const provider = await screen.findByTestId('provider-sentinel');
+    expect(provider.dataset.search).toBe(
+      `?return=${encodeURIComponent('/app/persona/p1/memory?chat=c1')}&focus=key`,
+    );
   });
 
   it('shows learn and consolidate errors in independent slots, each Retry firing its own action', async () => {

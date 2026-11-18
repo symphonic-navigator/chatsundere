@@ -134,8 +134,8 @@ vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
 import type { OAuthDiscovery } from '../../src/mcp/oauth/discovery.js';
@@ -163,6 +163,16 @@ const ROW: McpServerRow = {
   updatedAt: 1,
 };
 
+function ServerLinkingStub() {
+  const { search } = useLocation();
+  return (
+    <div>
+      <div>server linking</div>
+      <div data-testid="linking-return">{new URLSearchParams(search).get('return') ?? ''}</div>
+    </div>
+  );
+}
+
 function wrapAt(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -173,7 +183,7 @@ function wrapAt(path: string) {
           <Route path="/app/integrations/sign-in/:state" element={<PendingSignInPage />} />
           <Route path="/app/integrations/:serverId" element={<IntegrationServerPage />} />
           <Route path="/app/integrations" element={<div>integrations list</div>} />
-          <Route path="/app/account/server-linking" element={<div>server linking</div>} />
+          <Route path="/app/account/server-linking" element={<ServerLinkingStub />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -436,6 +446,48 @@ describe('IntegrationServerPage', () => {
         wrapAt('/app/integrations/new');
         await check();
         expect(await screen.findByLabelText('Name')).toHaveValue('kumbu.example');
+      });
+
+      it('restores the last draft when the user backs out of the sign-in', async () => {
+        checkServerMock.mockResolvedValue(signIn());
+        wrapAt('/app/integrations/new');
+        await check();
+        fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'My Kumbu' } });
+        fireEvent.change(screen.getByLabelText('Tool prefix'), { target: { value: 'mk' } });
+        fireEvent.click(screen.getByRole('checkbox', { name: 'On by default' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: /Trusted/ }));
+        fireEvent.click(screen.getByRole('checkbox', { name: /Local network/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        // *Not now* and *Back* both reach the flow's onClose.
+        act(() => (flowProps.current?.onClose as () => void)());
+        expect(await screen.findByLabelText('Name')).toHaveValue('My Kumbu');
+        expect(screen.getByLabelText('Tool prefix')).toHaveValue('mk');
+        expect(screen.getByRole('checkbox', { name: 'On by default' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Trusted/ })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Local network/ })).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        expect(flowProps.current?.draft).toMatchObject({
+          name: 'My Kumbu',
+          prefix: 'mk',
+          onByDefault: false,
+          autoRun: true,
+          allowDirect: true,
+        });
+      });
+
+      it('keeps a derived prefix following the name after backing out', async () => {
+        checkServerMock.mockResolvedValue(signIn());
+        wrapAt('/app/integrations/new');
+        await check();
+        fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Notes' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+        await screen.findByText('sign-in flow');
+        act(() => (flowProps.current?.onClose as () => void)());
+        expect(await screen.findByLabelText('Tool prefix')).toHaveValue('Notes');
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Diary' } });
+        expect(screen.getByLabelText('Tool prefix')).toHaveValue('Diary');
       });
 
       it('hands the flow a draft whose url is the checked endpoint', async () => {
@@ -790,6 +842,29 @@ describe('IntegrationServerPage', () => {
       gates.class2 = { disabled: true, tooltip: 'offline' };
       wrapAt('/app/integrations/s1');
       expect(screen.getByRole('button', { name: /remove server/i })).toBeEnabled();
+    });
+
+    it('offers Link a server for the local-only reason, returning to this page', async () => {
+      gates.proxy = false;
+      gates.link = 'local-only';
+      wrapAt('/app/integrations/o1');
+      expect(screen.getByText('○ Needs a linked Chatsundere server')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Link a server' }));
+      expect(await screen.findByText('server linking')).toBeTruthy();
+      expect(screen.getByTestId('linking-return')).toHaveTextContent('/app/integrations/o1');
+    });
+
+    it('shows no Link a server to a linked device whose server is offline', () => {
+      gates.proxy = false;
+      gates.link = 'linked';
+      wrapAt('/app/integrations/o1');
+      expect(screen.getByText('○ Waiting for your Chatsundere server')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Link a server' })).toBeNull();
+    });
+
+    it('shows no Link a server while connected', () => {
+      wrapAt('/app/integrations/o1');
+      expect(screen.queryByRole('button', { name: 'Link a server' })).toBeNull();
     });
 
     it('explains a test without the proxy in OAuth terms, not key-server terms', async () => {

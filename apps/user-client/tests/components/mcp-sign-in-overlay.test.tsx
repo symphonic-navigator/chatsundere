@@ -8,6 +8,10 @@ const m = vi.hoisted(() => ({
   flowProps: null as null | Record<string, unknown>,
   servers: [] as Array<Record<string, unknown>>,
   class2Disabled: false,
+  pending: [] as Array<Record<string, unknown>> | undefined,
+}));
+vi.mock('../../src/data/mcp-oauth-pending.js', () => ({
+  usePendingSignIns: () => ({ data: m.pending, isError: false }),
 }));
 vi.mock('../../src/sync/gate.js', () => ({
   useClass2Gate: () => ({ disabled: m.class2Disabled, tooltip: null }),
@@ -60,6 +64,7 @@ beforeEach(() => {
   m.toast.mockClear();
   m.flowProps = null;
   m.class2Disabled = false;
+  m.pending = [];
   m.servers = [{ id: 's1', name: 'Kumbu', url: 'https://kumbu.example/mcp', allowDirect: false }];
   m.check.mockResolvedValue({ kind: 'sign-in', discovery: DISCOVERY });
   useMcpApprovalStore.setState({ pending: [] });
@@ -114,7 +119,9 @@ describe('McpSignInOverlay', () => {
     fireEvent.change(screen.getByLabelText('draft'), { target: { value: 'half a thought' } });
     act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
     await screen.findByTestId('flow');
-    act(() => (m.flowProps?.onClose as () => void)());
+    // Held behind the approval (S1); the chat closing it still leaves the approval alone.
+    expect(screen.getByTestId('mcp-sign-in-hold').hidden).toBe(true);
+    act(() => useMcpSignInOverlay.getState().close());
     await waitFor(() => expect(screen.queryByTestId('flow')).toBeNull());
     expect(useMcpApprovalStore.getState().pending).toHaveLength(1);
     expect(settled).not.toHaveBeenCalled();
@@ -180,5 +187,116 @@ describe('McpSignInOverlay', () => {
     await screen.findByTestId('flow');
     unmount();
     expect(useMcpSignInOverlay.getState().target).toBeNull();
+  });
+
+  it('stays mounted but hidden and inert behind a pending approval, then shows again', async () => {
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    await screen.findByTestId('flow');
+    const hold = screen.getByTestId('mcp-sign-in-hold');
+    expect(hold.hidden).toBe(false);
+    expect(hold.hasAttribute('inert')).toBe(false);
+    const first = m.flowProps;
+
+    act(() => {
+      void useMcpApprovalStore.getState().request({
+        serverId: 's1',
+        serverName: 'Kumbu',
+        toolName: 'search',
+        args: {},
+        host: 'kumbu.example',
+        firstUse: false,
+      });
+    });
+    expect(hold.hidden).toBe(true);
+    expect(hold.hasAttribute('inert')).toBe(true);
+    // Still mounted: the flow keeps its state, and no new sign-in was started.
+    expect(screen.getByTestId('flow')).toBeTruthy();
+    expect(useMcpSignInOverlay.getState().target).not.toBeNull();
+    // An Escape meant for the approval does not close the hidden overlay.
+    act(() => (m.flowProps?.onClose as () => void)());
+    expect(useMcpSignInOverlay.getState().target).not.toBeNull();
+
+    const id = useMcpApprovalStore.getState().pending[0]?.id ?? '';
+    act(() => useMcpApprovalStore.getState().deny(id));
+    expect(hold.hidden).toBe(false);
+    expect(hold.hasAttribute('inert')).toBe(false);
+    expect(screen.getByTestId('mcp-sign-in-hold')).toBe(hold);
+    expect(m.check).toHaveBeenCalledTimes(1);
+    expect(m.flowProps?.discovery).toBe(first?.discovery);
+  });
+
+  it('opens hidden when an approval is already pending, and shows once it is answered', async () => {
+    render(<Chat />);
+    act(() => {
+      void useMcpApprovalStore.getState().request({
+        serverId: 's1',
+        serverName: 'Kumbu',
+        toolName: 'search',
+        args: {},
+        host: 'kumbu.example',
+        firstUse: false,
+      });
+    });
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    await screen.findByTestId('flow');
+    expect(screen.getByTestId('mcp-sign-in-hold').hidden).toBe(true);
+    const id = useMcpApprovalStore.getState().pending[0]?.id ?? '';
+    act(() => useMcpApprovalStore.getState().approve(id));
+    expect(screen.getByTestId('mcp-sign-in-hold').hidden).toBe(false);
+    expect(m.check).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes this server's kept sign-in on its waiting screen instead of a new check", async () => {
+    m.pending = [
+      { state: 'st-other', serverId: 's2', isNewServer: false, name: '', createdAt: 2 },
+      { state: 'st-1', serverId: 's1', isNewServer: false, name: '', createdAt: 1 },
+    ];
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    await screen.findByTestId('flow');
+    expect(m.check).not.toHaveBeenCalled();
+    expect(m.flowProps).toMatchObject({ mode: 'overlay', state: 'st-1', serverId: 's1' });
+    expect(m.flowProps?.discovery).toBeUndefined();
+    await act(async () => {
+      await (m.flowProps?.onConnected as (r: unknown) => Promise<void>)({
+        serverId: 's1',
+        draft: null,
+      });
+    });
+    expect(m.consent).toHaveBeenCalledWith('s1', 'https://kumbu.example/mcp');
+    expect(useMcpSignInOverlay.getState().target).toBeNull();
+  });
+
+  it('starts a new sign-in when the kept one is for another server or more access is asked', async () => {
+    m.pending = [{ state: 'st-2', serverId: 's2', isNewServer: false, name: '', createdAt: 1 }];
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    await screen.findByTestId('flow');
+    expect(m.check).toHaveBeenCalledTimes(1);
+    expect(m.flowProps?.state).toBeUndefined();
+    cleanup();
+
+    m.check.mockClear();
+    m.pending = [{ state: 'st-1', serverId: 's1', isNewServer: false, name: '', createdAt: 1 }];
+    useMcpSignInOverlay.setState({ target: null });
+    render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: ['write'] }));
+    await screen.findByTestId('flow');
+    expect(m.check).toHaveBeenCalledTimes(1);
+    expect(m.flowProps).toMatchObject({ extraScopes: ['write'], discovery: DISCOVERY });
+  });
+
+  it('waits for the pending sign-ins before deciding', async () => {
+    m.pending = undefined;
+    const { rerender } = render(<Chat />);
+    act(() => useMcpSignInOverlay.getState().open({ serverId: 's1', extraScopes: [] }));
+    expect(await screen.findByText('Checking Kumbu…')).toBeTruthy();
+    expect(m.check).not.toHaveBeenCalled();
+    m.pending = [{ state: 'st-1', serverId: 's1', isNewServer: false, name: '', createdAt: 1 }];
+    rerender(<Chat />);
+    await screen.findByTestId('flow');
+    expect(m.check).not.toHaveBeenCalled();
+    expect(m.flowProps?.state).toBe('st-1');
   });
 });

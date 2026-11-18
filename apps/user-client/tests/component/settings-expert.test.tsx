@@ -39,8 +39,8 @@ vi.mock('../../src/components/ModelSlotPicker.js', () => ({
 // ─── Imports (resolved after mocks are registered) ────────────────────────────
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { SettingsExpertPage } from '../../src/routes/app/settings/expert.js';
 
@@ -68,5 +68,34 @@ describe('SettingsExpertPage', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByRole('heading', { name: /Artefact expert/i })).toBeInTheDocument();
+  });
+});
+
+describe('SettingsExpertPage — return path', () => {
+  function renderAt(url: string) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/app/settings/expert" element={<SettingsExpertPage />} />
+            <Route path="/app/settings" element={<div data-testid="settings-sentinel" />} />
+            <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel" />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('?return= drives the back control', async () => {
+    renderAt(`/app/settings/expert?return=${encodeURIComponent('/app/chat/c1')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('chat-sentinel')).toBeInTheDocument());
+  });
+
+  it('without ?return= back goes to My Settings', async () => {
+    renderAt('/app/settings/expert');
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('settings-sentinel')).toBeInTheDocument());
   });
 });

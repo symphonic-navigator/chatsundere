@@ -109,10 +109,11 @@ describe('Cockpit', () => {
     expect(btn.title).toMatch(/live voice/i);
   });
 
-  it('Live is disabled when no voice provider is available', () => {
+  it('Live is aria-disabled (still tappable) when no voice provider is available', () => {
     const { container } = renderCockpit({ voiceUnavailable: 'no-provider' });
     const btn = container.querySelector('[data-control="live"]') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
+    expect(btn.disabled).toBe(false);
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn.title).toMatch(/voice|settings/i);
   });
 

@@ -113,6 +113,10 @@ function okResponse(revs: number[], head: number, epoch = 'E1'): SyncPushRespons
 }
 
 beforeEach(async () => {
+  // Each case starts from the inert test doubles, not whatever the module was
+  // loaded with: the first case in the file otherwise ran the real pull loop.
+  _resetWorkerForTests();
+  vi.mocked(sweepOrphanRevisions).mockClear();
   await _resetClientDataDbForTests();
   await openClientDataDb();
   seedLinkedOnline();
@@ -586,11 +590,13 @@ describe('runSyncCycle (spec §6)', () => {
       parentRef: null,
     });
     _setPushTransport(async () => okResponse([], 0));
+    _setPullLoop(vi.fn(async () => undefined));
 
     await runSyncCycle();
 
     expect(await db.trash.get('chats:old')).toBeUndefined();
     expect(await db.trash.get('chats:fresh')).toBeDefined();
+    expect(sweepOrphanRevisions).toHaveBeenCalledOnce();
   });
 
   it('sweeps the revisions of project files whose trash rows expired', async () => {
