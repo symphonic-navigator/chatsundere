@@ -34,10 +34,13 @@ export { registerAdapter, getAdapter } from './adapter-registry.js';
 
 export {
   buildPrompt,
+  TIME_STAMP_INSTRUCTION,
   TOOL_SUMMARY_INSTRUCTION,
   type BuildPromptInputs,
   type PromptJob,
+  type PromptTimeInput,
 } from './composition.js';
+export { formatAwayGap, formatGreetingNow, formatSentStamp } from './time-stamp.js';
 export { NSFW_PROMPT, TONALITY_PROMPT } from './identity/chatsundere-identity.js';
 export { buildContentAxisPrompt } from './content-axis.js';
 

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { describe, expect, it } from 'bun:test';
-import { type BuildPromptInputs, TOOL_SUMMARY_INSTRUCTION, buildPrompt } from './composition.js';
+import {
+  type BuildPromptInputs,
+  TIME_STAMP_INSTRUCTION,
+  TOOL_SUMMARY_INSTRUCTION,
+  buildPrompt,
+} from './composition.js';
 import {
   NSFW_PROMPT,
   ROLEPLAY_BEHAVIOUR_PROMPT,
@@ -442,6 +447,108 @@ describe('tool-summary job', () => {
       expect(buildPrompt(inputs({ personaInstructions: 'P' }), job)).not.toContain(
         TOOL_SUMMARY_INSTRUCTION,
       );
+    }
+  });
+});
+
+describe('time segment', () => {
+  const NOW = Date.parse('2026-11-21T08:02:00Z');
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('is absent when no time input is given', () => {
+    for (const job of ['chat', 'greeting'] as const) {
+      const out = buildPrompt(inputs(), job);
+      expect(out).not.toContain('<sent>');
+      expect(out).not.toContain("in the user's local time");
+    }
+  });
+
+  it('appends the static instruction last in a chat prompt', () => {
+    const out = buildPrompt(
+      inputs({ toolsInstruction: 'TOOLS-MARK', time: { mode: 'chat' } }),
+      'chat',
+    );
+    expect(out.endsWith(`TOOLS-MARK\n\n${TIME_STAMP_INSTRUCTION}`)).toBe(true);
+  });
+
+  it('carries the spec text verbatim', () => {
+    expect(TIME_STAMP_INSTRUCTION).toBe(
+      "Each user message starts with a `<sent>` tag holding the user's local date and time when they sent it. The app adds it; the user did not type it and does not see it. Use it to know the date, the time of day and how long it has been between messages. Never write a `<sent>` tag or a timestamp line yourself, and mention the time only when it matters.",
+    );
+  });
+
+  it('is byte-identical across calls at different clock times', () => {
+    const realNow = Date.now;
+    try {
+      Date.now = () => NOW;
+      const a = buildPrompt(inputs({ time: { mode: 'chat' } }), 'chat');
+      Date.now = () => NOW + 3 * DAY + 12_345;
+      const b = buildPrompt(inputs({ time: { mode: 'chat' } }), 'chat');
+      expect(a).toBe(b);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('dates the opener with the gap since the last interaction', () => {
+    const out = buildPrompt(
+      inputs({
+        time: {
+          mode: 'greeting',
+          now: NOW,
+          utcOffsetMinutes: 60,
+          lastInteractionAt: NOW - 2 * DAY,
+        },
+      }),
+      'greeting',
+    );
+    expect(
+      out.endsWith(
+        "It is Saturday, 21 November 2026, 09:02 in the user's local time. They last talked with you 2 days ago.",
+      ),
+    ).toBe(true);
+  });
+
+  it('leaves the gap sentence out when there was no interaction or it was under an hour ago', () => {
+    const date = "It is Saturday, 21 November 2026, 09:02 in the user's local time.";
+    const never = buildPrompt(
+      inputs({ time: { mode: 'greeting', now: NOW, utcOffsetMinutes: 60 } }),
+      'greeting',
+    );
+    expect(never.endsWith(date)).toBe(true);
+    const recent = buildPrompt(
+      inputs({
+        time: {
+          mode: 'greeting',
+          now: NOW,
+          utcOffsetMinutes: 60,
+          lastInteractionAt: NOW - 59 * 60_000,
+        },
+      }),
+      'greeting',
+    );
+    expect(recent.endsWith(date)).toBe(true);
+  });
+
+  it('does not cross modes between the chat and greeting jobs', () => {
+    expect(buildPrompt(inputs({ time: { mode: 'chat' } }), 'greeting')).not.toContain(
+      TIME_STAMP_INSTRUCTION,
+    );
+    expect(
+      buildPrompt(inputs({ time: { mode: 'greeting', now: NOW, utcOffsetMinutes: 0 } }), 'chat'),
+    ).not.toContain("in the user's local time");
+  });
+
+  it('is absent from the title, memory and tool-summary jobs', () => {
+    for (const job of ['title', 'memory', 'tool-summary'] as const) {
+      for (const time of [
+        { mode: 'chat' as const },
+        { mode: 'greeting' as const, now: NOW, utcOffsetMinutes: 60, lastInteractionAt: 0 },
+      ]) {
+        const out = buildPrompt(inputs({ time }), job);
+        expect(out).not.toContain('<sent>');
+        expect(out).not.toContain("in the user's local time");
+      }
     }
   });
 });
