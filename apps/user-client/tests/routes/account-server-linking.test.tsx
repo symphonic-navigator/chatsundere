@@ -18,12 +18,13 @@ function LocationProbe() {
 
 import { ServerLinkingPage } from '../../src/routes/app/account/server-linking.js';
 
-function renderPage() {
+function renderPage(url = '/app/account/server-linking') {
   return render(
-    <MemoryRouter initialEntries={['/app/account/server-linking']}>
+    <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/app/account/server-linking" element={<ServerLinkingPage />} />
         <Route path="/onboarding/invitation" element={<LocationProbe />} />
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -54,7 +55,30 @@ describe('ServerLinkingPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /link to server/i }));
     expect(screen.getByTestId('location').textContent).toBe(
-      '/onboarding/invitation?return=/app/account/server-linking',
+      `/onboarding/invitation?return=${encodeURIComponent('/app/account/server-linking')}`,
     );
+  });
+
+  it('"Link to server" passes the full URL, its own ?return= included', () => {
+    const own = `?return=${encodeURIComponent('/app/settings/providers?return=/app')}`;
+    renderPage(`/app/account/server-linking${own}`);
+    fireEvent.click(screen.getByRole('button', { name: /link to server/i }));
+    const text = screen.getByTestId('location').textContent ?? '';
+    const sent = new URLSearchParams(text.slice(text.indexOf('?')));
+    expect(sent.get('return')).toBe(`/app/account/server-linking${own}`);
+  });
+
+  it('?return= drives the back control', () => {
+    renderPage(
+      `/app/account/server-linking?return=${encodeURIComponent('/app/settings/providers?return=/app')}`,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    expect(screen.getByTestId('location').textContent).toBe('/app/settings/providers?return=/app');
+  });
+
+  it('without ?return= back goes to My Account', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    expect(screen.getByTestId('location').textContent).toBe('/app/account');
   });
 });

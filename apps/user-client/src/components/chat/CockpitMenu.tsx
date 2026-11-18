@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReasoningControl, SearchTier } from '@chatsundere/llm-unified';
+import { Link } from 'react-router-dom';
 import type { ChatFontScale } from '../../lib/chat-font-scale.js';
 import type { ReasoningState } from '../../lib/reasoning-resolver.js';
 
@@ -10,7 +11,19 @@ const FONT_SIZE_LABEL: Record<ChatFontScale, string> = {
   larger: 'Larger',
 };
 
+/** The read-only "which model answers" row; the model belongs to the persona. */
+export interface CockpitMenuModel {
+  /** The offering's display name (canonical name, else the upstream slug). */
+  name: string;
+  /** The provider's display name. */
+  provider: string;
+  /** The persona hub at its model picker, returning to this chat. */
+  changeHref: string;
+}
+
 interface Props {
+  /** Omitted only by callers outside the chat (tests); the cockpit always passes it. */
+  model?: CockpitMenuModel;
   control: ReasoningControl;
   reasoning: ReasoningState;
   onReasoningChange: (r: ReasoningState) => void;
@@ -38,6 +51,22 @@ export function CockpitMenu(p: Props): JSX.Element {
 
   return (
     <div className="cockpit-menu" role="menu">
+      {p.model ? (
+        <div className="cockpit-menu-section" data-section="model">
+          <div className="cockpit-menu-label">Model</div>
+          <div className="text-sm">
+            {p.model.name} · {p.model.provider}
+          </div>
+          <Link
+            role="menuitem"
+            to={p.model.changeHref}
+            onClick={p.onClose}
+            className="mt-1 inline-block text-xs text-paper-soft underline-offset-2 hover:underline"
+          >
+            change on the persona ›
+          </Link>
+        </div>
+      ) : null}
       {hasReasoning ? (
         <div className="cockpit-menu-section" data-section="reasoning">
           <div className="cockpit-menu-label">Reasoning</div>

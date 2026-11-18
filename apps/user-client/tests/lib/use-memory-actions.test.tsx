@@ -32,6 +32,7 @@ vi.mock('../../src/lib/queryClient.js', () => ({
   queryClient: { invalidateQueries: (...a: unknown[]) => invalidateQueries(...a) },
 }));
 
+import { MasterKeyUnavailableError, ProviderKeyLockedError } from '../../src/data/send-errors.js';
 import { useMemoryActions } from '../../src/lib/use-memory-actions.js';
 
 afterEach(() => vi.clearAllMocks());
@@ -86,7 +87,7 @@ describe('useMemoryActions', () => {
   });
 
   it('consolidateNow sets error when resolution fails', async () => {
-    resolveMemoryConsolidationArgs.mockRejectedValue(new Error('master key unavailable'));
+    resolveMemoryConsolidationArgs.mockRejectedValue(new MasterKeyUnavailableError('memory'));
     tryAcquireMemoryLock.mockReturnValue(true);
     const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
     await act(async () => {
@@ -94,6 +95,22 @@ describe('useMemoryActions', () => {
     });
     await waitFor(() => expect(result.current.consolidateState.status).toBe('error'));
     expect(result.current.consolidateState.error).toBe('no-credentials');
+  });
+
+  it('carries the locked provider (id and name only) for a key that cannot be opened', async () => {
+    resolveMemoryConsolidationArgs.mockRejectedValue(
+      new ProviderKeyLockedError('nano-gpt', 'NanoGPT'),
+    );
+    const { result } = renderHook(() => useMemoryActions('p1', 'c1'));
+    await act(async () => {
+      await result.current.consolidateNow();
+    });
+    await waitFor(() => expect(result.current.consolidateState.status).toBe('error'));
+    expect(result.current.consolidateState.error).toBe('key-locked');
+    expect(result.current.consolidateState.lockedKey).toEqual({
+      templateId: 'nano-gpt',
+      providerName: 'NanoGPT',
+    });
   });
 
   it('shows the busy toast and stays idle when the mutex is held', async () => {

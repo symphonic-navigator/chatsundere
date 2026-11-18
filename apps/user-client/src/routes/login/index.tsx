@@ -15,6 +15,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { activateSession } from '../../boot/activate-session.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { PASSPHRASE_SENTENCE } from '../../data/send-errors.js';
 import { useDisplayName } from '../../data/settings.js';
 import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
@@ -51,6 +52,12 @@ export function Login() {
   // Read once per mount: the key is single-use and must not be re-consumed on re-render.
   const [postUpdateReturn] = useState(consumeReturnPath);
   const returnTarget = safeReturnTarget(searchParams.get('return') ?? postUpdateReturn);
+  // `need=passphrase` (spec 0.5.0 papercuts, item 7): the app asked for the
+  // passphrase because the session holds no master key. A passkey unlock would
+  // not restore it, so the passkey stays visible but disabled, and a user who
+  // is already signed in may step back without unlocking.
+  const needPassphrase = searchParams.get('need') === 'passphrase';
+  const sessionActive = useSessionStore((s) => s.session !== null);
 
   const [username, setUsername] = useState<string | null>(null);
   // Whether a linked account exists — drives which login flow to call. Sourced
@@ -104,6 +111,13 @@ export function Login() {
       window.removeEventListener('chatsundere:splash-dismissed', once);
     };
   }, []);
+
+  // The cold-start focus above can run before the form exists (it renders after
+  // the account loads); when the passphrase is what was asked for, focus it once
+  // the field is there.
+  useEffect(() => {
+    if (needPassphrase && username !== null && linkStatusKnown) passphraseRef.current?.focus();
+  }, [needPassphrase, username, linkStatusKnown]);
 
   // Load account info and biometric availability once on mount.
   useEffect(() => {
@@ -285,14 +299,22 @@ export function Login() {
         <div className="space-y-4">
           {/* Primary biometric button — shown when passkeys exist and WebAuthn is available */}
           {passkeyUnlockAvailable && (
-            <button
-              type="button"
-              onClick={() => void handleBiometricUnlock()}
-              disabled={busy || applying}
-              className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
-            </button>
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => void handleBiometricUnlock()}
+                disabled={busy || applying || needPassphrase}
+                aria-describedby={needPassphrase ? 'login-passkey-reason' : undefined}
+                className="w-full rounded-[var(--radius-card)] bg-aurora-600 px-4 py-3 font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? copy.login.unlockingCta : copy.login.passkeyUnlockCta}
+              </button>
+              {needPassphrase ? (
+                <p id="login-passkey-reason" className="text-center text-xs text-paper-soft">
+                  {copy.login.needsPassphrase}
+                </p>
+              ) : null}
+            </div>
           )}
 
           {/* Passphrase field — always present; collapsed label when biometric is primary */}
@@ -303,6 +325,11 @@ export function Login() {
             }}
             className="space-y-4"
           >
+            {/* Why the app sent you here, said once above the field — with or
+                without a passkey, since only the passphrase restores the keys. */}
+            {needPassphrase ? (
+              <p className="text-sm text-paper-soft">{PASSPHRASE_SENTENCE}</p>
+            ) : null}
             <PassphraseField
               id="login-passphrase"
               label={copy.login.passphraseLabel}
@@ -329,6 +356,15 @@ export function Login() {
 
           {/* Forgot passphrase — always visible */}
           <div className="space-y-2 text-center">
+            {needPassphrase && sessionActive ? (
+              <button
+                type="button"
+                onClick={() => navigate(returnTarget, { replace: true })}
+                className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+              >
+                {copy.login.notNow}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => navigate('/login/recovery')}

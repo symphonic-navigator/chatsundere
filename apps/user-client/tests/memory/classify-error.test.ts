@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest';
+import { MasterKeyUnavailableError, ProviderKeyLockedError } from '../../src/data/send-errors.js';
 import { classifyMemoryActionError } from '../../src/memory/classify-error.js';
 import { MemoryInvalidOutputError } from '../../src/memory/pipeline.js';
 
@@ -11,7 +12,10 @@ function statusError(status: number): Error & { status: number } {
 
 describe('classifyMemoryActionError', () => {
   it.each([
-    [new Error('memory-learn: master key unavailable — re-authenticate'), 'no-credentials'],
+    [new MasterKeyUnavailableError('memory-learn'), 'no-credentials'],
+    [new ProviderKeyLockedError('nano-gpt', 'NanoGPT'), 'key-locked'],
+    // By type, not by phrase: a plain error that merely mentions the master key is not it.
+    [new Error('memory-learn: master key unavailable — re-authenticate'), 'failed'],
     [new MemoryInvalidOutputError(), 'invalid-output'],
     [new DOMException('The operation timed out.', 'TimeoutError'), 'timeout'],
     [new DOMException('Aborted', 'AbortError'), 'timeout'],

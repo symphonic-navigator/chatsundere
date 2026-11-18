@@ -20,9 +20,8 @@ interface Props {
   onRenameChat: (next: string | null) => void;
   onOpenPersonaEditor?: () => void;
   /** Name of the project this chat belongs to. Projects are not yet modelled,
-   *  so this is `null`/absent today and the slot shows a muted placeholder —
-   *  reserving the space (in the persona's accent + display font) for when the
-   *  feature lands. */
+   *  so this is `null`/absent today and nothing is rendered; the prop stays so
+   *  the line (persona accent + display font) returns when the feature lands. */
   projectName?: string | null;
   /** Whether the conversation currently meets the compaction preconditions
    *  (message count + token floor). When false the gauge is disabled with a
@@ -144,22 +143,15 @@ export function InteractionTopbar(p: Props): JSX.Element {
             New chat
           </div>
         )}
-        <div
-          className="topbar-project"
-          style={{ color: p.persona.colour }}
-          data-empty={p.projectName ? undefined : 'true'}
-          title={p.projectName ?? 'No project'}
-        >
-          {p.projectName ?? '(no project)'}
-        </div>
+        {p.projectName ? (
+          <div className="topbar-project" style={{ color: p.persona.colour }} title={p.projectName}>
+            {p.projectName}
+          </div>
+        ) : null}
       </div>
 
       <div className="topbar-right">
         <div className="status-group">
-          <div className="journal-indicator" title="Uncommitted journal entries">
-            <span className="journal-dot" />
-            <span>0</span>
-          </div>
           <button
             type="button"
             className="context-gauge"
