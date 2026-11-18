@@ -134,7 +134,17 @@ function readProposedLink(state: unknown): FromChat | null {
   // *Use a key instead* and the card are different callers; the key wins.
   if (typeof s?.useKeyFor === 'string' || typeof s?.proposedLink !== 'string') return null;
   const checked = normaliseConnectorLink(s.proposedLink);
-  return checked.ok ? { url: checked.url, host: checked.host } : null;
+  // `URL.host` keeps a port, as "Checking <host>…" does: one host notion on every screen.
+  return checked.ok ? { url: checked.url, host: new URL(checked.url).host } : null;
+}
+
+/** The host of a link as typed in the form, or null while it does not parse. */
+function hostOfLink(link: string): string | null {
+  try {
+    return new URL(link.trim()).host;
+  } catch {
+    return null;
+  }
 }
 
 type AddPhase =
@@ -311,6 +321,8 @@ function IntegrationServerForm({
 
   const [name, setName] = useState(existing?.name ?? seed?.name ?? '');
   const [url, setUrl] = useState(existing?.url ?? seed?.url ?? '');
+  // Once the link no longer points at the suggested host, the line goes for good.
+  const [suggestionKept, setSuggestionKept] = useState(true);
   const [prefix, setPrefix] = useState(existing?.prefix ?? '');
   const [prefixEdited, setPrefixEdited] = useState(existing != null);
   const [authScheme, setAuthScheme] = useState<AuthScheme>(
@@ -664,7 +676,9 @@ function IntegrationServerForm({
             onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
           />
         ) : null}
-        {seed?.suggestedHost && !existing ? <SuggestedInChat host={seed.suggestedHost} /> : null}
+        {seed?.suggestedHost && !existing && suggestionKept ? (
+          <SuggestedInChat host={seed.suggestedHost} />
+        ) : null}
         {existing && offerLinking ? (
           <Button
             tone="primary"
@@ -716,6 +730,7 @@ function IntegrationServerForm({
             aria-describedby={isOAuth ? 'mcp-url-reason' : undefined}
             onChange={(e) => {
               setUrl(e.target.value);
+              if (hostOfLink(e.target.value) !== seed?.suggestedHost) setSuggestionKept(false);
               setDirty(true);
               clearTestResult();
               setTools([]);

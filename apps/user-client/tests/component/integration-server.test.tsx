@@ -135,6 +135,7 @@ vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpOAuthGrantRow, McpServerRow } from '../../src/boot/client-data-db.js';
@@ -190,8 +191,7 @@ function wrapAt(path: string) {
   );
 }
 
-// Every pending check is settled before its test ends, passing or failing: a vi.fn
-// result left pending keeps the Vitest worker from finishing the file.
+// Every pending check is settled after each test, so a failing test leaves no check in flight.
 const unsettled: Array<() => void> = [];
 afterEach(() => {
   for (const settle of unsettled.splice(0)) settle();
@@ -220,25 +220,28 @@ function LocationProbe() {
 }
 
 /** Mounts *Add server* as the connector card's tap does: a `?return=` and navigation state. */
-function wrapAdd(state: unknown, search = '?return=%2Fapp%2Fchat%2Fc1') {
+function wrapAdd(state: unknown, search = '?return=%2Fapp%2Fchat%2Fc1', strict = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Outer = strict ? StrictMode : ({ children }: { children: React.ReactNode }) => children;
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[{ pathname: '/app/integrations/new', search, state }]}>
-        <Routes>
-          <Route
-            path="/app/integrations/new"
-            element={
-              <>
-                <IntegrationServerPage />
-                <LocationProbe />
-              </>
-            }
-          />
-          <Route path="/app/integrations" element={<div>integrations list</div>} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <Outer>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[{ pathname: '/app/integrations/new', search, state }]}>
+          <Routes>
+            <Route
+              path="/app/integrations/new"
+              element={
+                <>
+                  <IntegrationServerPage />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/app/integrations" element={<div>integrations list</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </Outer>,
   );
 }
 
@@ -746,6 +749,69 @@ describe('IntegrationServerPage', () => {
       await act(async () => pendingCheck.resolve(SIGN_IN));
       expect(await screen.findByText('Sign-in required')).toBeTruthy();
       expect(checkServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks exactly once under StrictMode', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' }, undefined, true);
+      expect(await screen.findByRole('button', { name: 'Checking kumbu.example…' })).toBeTruthy();
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(await screen.findByText('Sign-in required')).toBeTruthy();
+      expect(checkServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('consumes the navigation state of an invalid link too', async () => {
+      wrapAdd({ proposedLink: 'http://kumbu.example/mcp' });
+      await waitFor(() => expect(screen.getByTestId('probe-state')).toHaveTextContent('null'));
+      expect(screen.getByTestId('probe-type')).toHaveTextContent('REPLACE');
+      expect(checkServerMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the manual form when a check still running resolves afterwards', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      await screen.findByRole('button', { name: 'Checking kumbu.example…' });
+      const manual = screen.getByRole('button', { name: 'Enter details manually' });
+      expect(manual).toBeEnabled();
+      fireEvent.click(manual);
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Kumbu' } });
+      await act(async () => pendingCheck.resolve(SIGN_IN));
+      expect(screen.queryByText('Sign-in required')).toBeNull();
+      expect(screen.getByLabelText('Name')).toHaveValue('My Kumbu');
+      expect(screen.getByLabelText('URL')).toHaveValue('https://kumbu.example/mcp');
+    });
+
+    it('names host and port alike in the line and while checking', async () => {
+      const pendingCheck = deferred<unknown>();
+      checkServerMock.mockReturnValue(pendingCheck.promise);
+      wrapAdd({ proposedLink: 'https://kumbu.example:8443/mcp' });
+      const button = await screen.findByRole('button', { name: 'Checking kumbu.example:8443…' });
+      const line = screen.getByText(/^Suggested in the chat/);
+      expect(line).toHaveTextContent('Check that kumbu.example:8443 is the server you want');
+      // Long hosts wrap at 380 px instead of overflowing.
+      expect(line.className).toContain('[overflow-wrap:anywhere]');
+      expect(button.className).toContain('[overflow-wrap:anywhere]');
+    });
+
+    it('drops the line on the form once the URL no longer has the suggested host', async () => {
+      checkServerMock.mockResolvedValue({
+        kind: 'key',
+        route: 'proxy',
+        endpoint: 'https://kumbu.example/mcp',
+      });
+      wrapAdd({ proposedLink: 'https://kumbu.example/mcp' });
+      await screen.findByLabelText('Key');
+      const url = screen.getByLabelText('URL');
+      fireEvent.change(url, { target: { value: 'https://kumbu.example/other' } });
+      expect(screen.getByText(SUGGESTED)).toBeTruthy();
+      fireEvent.change(url, { target: { value: 'https://evil.example/mcp' } });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
+      fireEvent.change(url, { target: { value: 'https://kumbu.example/mcp' } });
+      expect(screen.queryByText(/Suggested in the chat/)).toBeNull();
     });
 
     it.each([

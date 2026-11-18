@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,8 +54,7 @@ describe('CheckServerStep on a redirecting link', () => {
 const SUGGESTED =
   'Suggested in the chat. Check that kumbu.example is the server you want — it will receive what your companion sends to its tools.';
 
-// Every pending check is settled before its test ends, passing or failing: a vi.fn
-// result left pending keeps the Vitest worker from finishing the file.
+// Every pending check is settled after each test, so a failing test leaves no check in flight.
 const unsettled: Array<() => void> = [];
 afterEach(() => {
   for (const settle of unsettled.splice(0)) settle();
@@ -98,6 +97,29 @@ describe('CheckServerStep with a link from the chat', () => {
     pending.resolve({ kind: 'unreachable', directOnly: false, error: 'Nope.', cause: 'other' });
     expect(await screen.findByText('Nope.')).toBeTruthy();
     expect(checkServerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a check result that arrives after the step unmounted', async () => {
+    const pending = deferred<unknown>();
+    checkServerMock.mockReturnValue(pending.promise);
+    const onResult = vi.fn();
+    const { unmount } = render(
+      <MemoryRouter>
+        <CheckServerStep
+          hasProxy={true}
+          initialLink="https://kumbu.example/mcp"
+          autoCheck
+          onResult={onResult}
+          onManual={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Checking kumbu.example…' });
+    unmount();
+    await act(async () =>
+      pending.resolve({ kind: 'key', route: 'proxy', endpoint: 'https://kumbu.example/mcp' }),
+    );
+    expect(onResult).not.toHaveBeenCalled();
   });
 
   it('does not check on mount without autoCheck', () => {

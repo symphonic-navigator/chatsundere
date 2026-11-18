@@ -18,7 +18,7 @@ type Unreachable = Extract<CheckResult, { kind: 'unreachable' }>;
 /** The line that names the host of a link the companion proposed (spec §5.2). */
 export function SuggestedInChat(props: { host: string }): JSX.Element {
   return (
-    <p className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper">
+    <p className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] px-3 py-2 text-xs text-paper [overflow-wrap:anywhere]">
       {`Suggested in the chat. Check that ${props.host} is the server you want — it will receive what your companion sends to its tools.`}
     </p>
   );
@@ -89,6 +89,17 @@ export function CheckServerStep(props: {
   const [edited, setEdited] = useState(false);
   // A ref, not state: StrictMode runs mount effects twice, and the check must run once.
   const autoChecked = useRef(false);
+  // A result counts only while this step is mounted and its check is the latest one, so a
+  // late answer cannot replace what *Enter details manually* opened (or a newer check).
+  const mounted = useRef(false);
+  const latestCheck = useRef(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, on mount only.
   useEffect(() => {
@@ -100,17 +111,21 @@ export function CheckServerStep(props: {
   async function onCheck(): Promise<void> {
     const target = link.trim();
     if (!target) return;
+    const run = ++latestCheck.current;
+    const current = () => mounted.current && run === latestCheck.current;
     setChecking(hostOfTyped(target));
     setFailure(null);
     try {
       // The Local network toggle lives in the manual path, so the check never asks for it.
       const result = await checkServer(target, { hasProxy: props.hasProxy, allowDirect: false });
+      if (!current()) return;
       if (result.kind === 'unreachable') setFailure(result);
       else props.onResult(result, target);
     } catch {
+      if (!current()) return;
       setFailure({ kind: 'unreachable', directOnly: !props.hasProxy, error: '', cause: 'probe' });
     } finally {
-      setChecking(null);
+      if (current()) setChecking(null);
     }
   }
 
@@ -148,6 +163,7 @@ export function CheckServerStep(props: {
 
       <Button
         tone="primary"
+        className="[overflow-wrap:anywhere]"
         disabled={!link.trim() || checking !== null}
         onClick={() => void onCheck()}
       >
