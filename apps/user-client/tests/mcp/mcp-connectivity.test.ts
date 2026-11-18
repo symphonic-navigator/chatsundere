@@ -209,6 +209,49 @@ describe('redirects (spec §6.3)', () => {
     expect(r).toMatchObject({ error: 'MCP initialise failed: HTTP 401', auth: 'required' });
   });
 
+  it('keeps the auth answer when a redirect comes after it (T5 review, 2026-11-18)', async () => {
+    const auth401: McpProbeResult = {
+      ok: false,
+      tools: [],
+      error: 'MCP initialise failed: HTTP 401',
+      auth: 'required',
+    };
+    const redirect307: McpProbeResult = {
+      ok: false,
+      tools: [],
+      error: MCP_REDIRECT_DETAIL,
+      redirect: true,
+    };
+    const results: Record<string, McpProbeResult> = {
+      'direct https://r.example/api': auth401,
+      'direct https://r.example/api/mcp': redirect307,
+      'proxy https://r.example/api': auth401,
+      'proxy https://r.example/api/mcp': redirect307,
+    };
+    const r = await resolveConnection(
+      buildCandidates('https://r.example/api', true, true),
+      async (c) => results[`${c.routing} ${c.url}`] as McpProbeResult,
+    );
+    expect(r).toMatchObject({ error: 'MCP initialise failed: HTTP 401', auth: 'required' });
+    expect(r.redirect).toBeUndefined();
+  });
+
+  it('flags a connection whose whole answer is a redirect', async () => {
+    const r = await resolveConnection(
+      buildCandidates('https://r.example/mcp', false, true),
+      async () => ({ ok: false, tools: [], error: MCP_REDIRECT_DETAIL, redirect: true }),
+    );
+    expect(r).toMatchObject({ ok: false, error: MCP_REDIRECT_DETAIL, redirect: true });
+  });
+
+  it('does not flag a plain failure', async () => {
+    const r = await resolveConnection(
+      buildCandidates('https://r.example/mcp', false, true),
+      async () => ({ ok: false, tools: [], error: 'HTTP 503', httpStatus: 503 }),
+    );
+    expect(r.redirect).toBeUndefined();
+  });
+
   it('the status line reads the detail sentence from lastError', () => {
     const row = {
       id: 'k',

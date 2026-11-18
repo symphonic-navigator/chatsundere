@@ -628,21 +628,30 @@ describe('a server that answers with a redirect (spec §6.3)', () => {
     expect(r).toEqual(REDIRECT_RESULT);
   });
 
-  it('is the same for every call, so it replays byte-identically', async () => {
+  it('is recorded once per server per send: later calls repeat its words bare, unsent', async () => {
     redirected();
     const tool = one(keyServer({ hasConsent: true }));
     const first = await tool?.execute({});
     const second = await tool?.execute({});
-    expect(second).toEqual(first);
-    expect(second).toEqual(REDIRECT_RESULT);
+    expect(first).toEqual(REDIRECT_RESULT);
+    expect(second).toEqual({ ok: false, output: '', error: REDIRECT_RESULT.error });
+    expect(mcpToolsCall).toHaveBeenCalledTimes(1);
   });
 
-  it('also comes from a route probe that ended in a redirect', async () => {
+  it('also comes from a route probe flagged as a redirect', async () => {
     const r = await one(keyServer({ hasConsent: true, routing: null, resolvedEndpoint: null }), {
-      resolveRoute: async () => ({ ok: false, error: MCP_REDIRECT_DETAIL }),
+      resolveRoute: async () => ({ ok: false, error: MCP_REDIRECT_DETAIL, redirect: true }),
     })?.execute({});
     expect(r).toEqual(REDIRECT_RESULT);
     expect(mcpToolsCall).not.toHaveBeenCalled();
+  });
+
+  it('takes the redirect path only on the flag, never on the words', async () => {
+    const r = await one(keyServer({ hasConsent: true, routing: null, resolvedEndpoint: null }), {
+      resolveRoute: async () => ({ ok: false, error: MCP_REDIRECT_DETAIL }),
+    })?.execute({});
+    expect(r?.meta).toBeUndefined();
+    expect(r?.error).toBe(`Could not connect to Keyed: ${MCP_REDIRECT_DETAIL}`);
   });
 
   it('comes from an OAuth server too', async () => {

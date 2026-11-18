@@ -127,7 +127,8 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
     (row.kind === 'tool-call' && (!!codeOf(payload) || !!payload?.result || !!payload?.error)) ||
     (isLore && (payload?.entries?.length ?? 0) > 0);
   const code = codeOf(payload);
-  const redirectNotice = readMcpRedirectNotice(payload?.mcpRedirect);
+  const redirectNotice =
+    row.kind === 'tool-call' ? readMcpRedirectNotice(payload?.mcpRedirect) : null;
 
   return (
     <span className="pill-wrap">

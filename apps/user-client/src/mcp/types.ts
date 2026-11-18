@@ -53,6 +53,8 @@ export interface McpConnectionResult {
   scope?: string;
   /** Set when the grant is paused on this device; the test then says nothing about the route. */
   held?: true;
+  /** Set when a redirect is the whole answer and no candidate answered with an auth refusal. */
+  redirect?: true;
 }
 
 /** A resolved auth header (plaintext key already opened). */

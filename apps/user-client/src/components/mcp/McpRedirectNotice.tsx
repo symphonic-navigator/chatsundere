@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Link, useLocation } from 'react-router-dom';
+import { useMcpServers } from '../../data/mcp-servers.js';
 import type { McpRedirectNotice as McpRedirectNoticePayload } from '../../mcp/mcp-tools.js';
 import { mcpRedirectNoticeLine } from '../../mcp/redirect-copy.js';
 
@@ -13,17 +14,26 @@ export function readMcpRedirectNotice(value: unknown): McpRedirectNoticePayload 
 
 /**
  * The in-chat notice under a tool pill whose MCP server answered with a redirect
- * (add-mcp-connector spec §6.3). Its action opens the server's page, which returns here.
+ * (add-mcp-connector spec §6.3). Its action opens the server's page, which returns here;
+ * once the server is known to be gone from this device, it opens My Integrations instead.
  */
 export function McpRedirectNotice({ notice }: { notice: McpRedirectNoticePayload }): JSX.Element {
   const location = useLocation();
-  const returnTo = `${location.pathname}${location.search}`;
-  const href = `/app/integrations/${encodeURIComponent(notice.serverId)}?return=${encodeURIComponent(returnTo)}`;
+  const { data: servers } = useMcpServers();
+  const returnTo = encodeURIComponent(`${location.pathname}${location.search}`);
+  // Until the servers have loaded, the server is assumed to be there.
+  const gone = servers !== undefined && !servers.some((s) => s.id === notice.serverId);
+  const href = gone
+    ? `/app/integrations?return=${returnTo}`
+    : `/app/integrations/${encodeURIComponent(notice.serverId)}?return=${returnTo}`;
   return (
     <output className="pill-notice">
       <span>{mcpRedirectNoticeLine(notice.serverName)}</span>
-      <Link to={href} className="cs-btn inline-flex min-h-[44px] items-center">
-        {`Open ${notice.serverName}`}
+      <Link
+        to={href}
+        className="cs-btn inline-flex min-h-[44px] max-w-full items-center [overflow-wrap:anywhere]"
+      >
+        {gone ? 'Open My Integrations' : `Open ${notice.serverName}`}
       </Link>
     </output>
   );

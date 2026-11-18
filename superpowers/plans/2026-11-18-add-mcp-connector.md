@@ -88,7 +88,7 @@ Commands run in `apps/user-client` unless stated. Baseline 2026-11-18: 675 files
 
 **Files:** `src/routes/app/integrations/server.tsx`, `src/routes/app/integrations/sign-in.tsx`, `src/components/mcp/CheckServerStep.tsx`, tests as in T7 plus the waiting-screen test.
 
-**What:** §5.5's table, every row: `returnTo` read with `safeReturnPath(…, null)` (or an equivalent that yields "none"), handed to `IntegrationServerForm`, the toasts, *Link a server* with `?return=<chatPath>` in proposal mode, the waiting screen's `?return=` on connected, saving later, *Cancel* and *Use a key instead*; `PageScaffold back` from `returnTo`. `PageBar` and `PageScaffold` untouched.
+**What:** §5.5's table, every row: `returnTo` read with `safeReturnPath(…, null)` (or an equivalent that yields "none"), handed to `IntegrationServerForm`, the toasts, *Link a server* with `?return=<chatPath>` in proposal mode, the waiting screen's `?return=` on connected, saving later, *Cancel* and *Use a key instead*; `PageScaffold back` from `returnTo`. `PageBar` and `PageScaffold` untouched. **Also the detail route** (`/app/integrations/:serverId`, added after the T5 review): `IntegrationServerForm`'s `back`, *Save* and *Remove* honour `?return=`, so the redirect notice's *Open <name>* and the card's *Open* come back to the chat.
 
 ---
 

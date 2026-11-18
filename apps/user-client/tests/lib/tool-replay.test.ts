@@ -25,6 +25,7 @@ import {
   toolTranscriptRefs,
   truncateReplayResult,
 } from '../../src/lib/tool-replay.js';
+import { mcpRedirectToolError } from '../../src/mcp/redirect-copy.js';
 
 // Full, realistic rows — never text-only stubs (a stub once hid a pill-loss CRITICAL).
 function msg(id: string, role: MessageRow['role'], contentBlocks: ContentBlock[]): MessageRow {
@@ -227,6 +228,32 @@ describe('replayHistory', () => {
     );
     expect(out[1]?.content).toBe('The expert returned no answer.');
     expect(out[2]?.content).toBe(INTERRUPTED_RESULT);
+  });
+
+  it('replays a redirected MCP call as its constant error, with or without the notice', () => {
+    const error = mcpRedirectToolError('Keyed');
+    const replayOf = (withNotice: boolean) => {
+      const base = toolPill('pR', 'keyed__go', { status: 'failed', result: undefined });
+      // As tool-loop builds a failed pill: the error, then the result's meta spread in.
+      const pill: PillRow = {
+        ...base,
+        payload: {
+          ...(base.payload as Record<string, unknown>),
+          result: undefined,
+          error,
+          ...(withNotice ? { mcpRedirect: { serverId: 'k', serverName: 'Keyed' } } : {}),
+        },
+      };
+      const row = msg('m-p', 'persona', [
+        { type: 'pill', pillId: 'pR' },
+        { type: 'text', text: 'It redirected.' },
+      ]);
+      const out = replayHistory([row], ctx([pill], { activeToolNames: new Set(['keyed__go']) }));
+      const tool = out.find((m) => m.role === 'tool');
+      expect(tool?.content).toBe(error);
+      return out;
+    };
+    expect(replayOf(true)).toEqual(replayOf(false));
   });
 
   it('truncates a long result', () => {

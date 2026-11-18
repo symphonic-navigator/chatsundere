@@ -95,17 +95,17 @@ export function candidatesFor(
   }));
 }
 
-// An auth answer proves that candidate is the server, so its error stands; otherwise a
+// An auth answer proves that candidate is the server, so its own error stands; otherwise a
 // redirect is reported only when it is the whole story (spec §6.3).
-function connectionError(
-  authAnswered: boolean,
+function connectionFailure(
+  authError: string | null,
   failures: readonly { url: string; result: McpProbeResult }[],
   lastError: string,
   plainError: string | null,
-): string {
-  if (authAnswered) return lastError;
-  if (redirectIsTheAnswer(failures)) return MCP_REDIRECT_DETAIL;
-  return plainError ?? lastError;
+): Pick<McpConnectionResult, 'error' | 'redirect'> {
+  if (authError !== null) return { error: authError };
+  if (redirectIsTheAnswer(failures)) return { error: MCP_REDIRECT_DETAIL, redirect: true };
+  return { error: plainError ?? lastError };
 }
 
 /**
@@ -119,6 +119,7 @@ export async function resolveConnection(
 ): Promise<McpConnectionResult> {
   let lastError = 'No candidates';
   let lastAuth: Pick<McpProbeResult, 'auth' | 'scope'> = {};
+  let authError: string | null = null;
   let plainError: string | null = null;
   const failures: { url: string; result: McpProbeResult }[] = [];
   for (const c of candidates) {
@@ -131,6 +132,7 @@ export async function resolveConnection(
     if (!r.redirect) plainError = lastError;
     if (r.auth) {
       lastAuth = { auth: r.auth, ...(r.scope ? { scope: r.scope } : {}) };
+      authError = lastError;
       // An auth answer proves the server is reachable here; trying the next routing would
       // only send the same token a second time.
       if (opts.stopOnAuth) break;
@@ -143,7 +145,7 @@ export async function resolveConnection(
     tools: [],
     // A redirect is the actionable answer (enter the final link) unless a candidate answered
     // with an auth refusal, which proves that candidate is the server (spec §6.3).
-    error: connectionError(lastAuth.auth !== undefined, failures, lastError, plainError),
+    ...connectionFailure(authError, failures, lastError, plainError),
     ...lastAuth,
   };
 }
