@@ -55,7 +55,8 @@ export function EntranceHall(): JSX.Element {
   const providerCount = (providers.data ?? []).filter((p) => p.enabled).length;
 
   const setupSteps: SetupStep[] = [];
-  if (providerCount === 0) setupSteps.push({ label: 'Connect a provider', to: '/app/settings' });
+  if (providerCount === 0)
+    setupSteps.push({ label: 'Connect a provider', to: '/app/settings/providers?return=/app' });
   if (personaCount === 0)
     setupSteps.push({ label: 'Create your first companion', to: '/app/persona/new' });
   const needsSetup = setupSteps.length > 0;

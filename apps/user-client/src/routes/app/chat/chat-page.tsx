@@ -66,6 +66,7 @@ import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
+import { voiceRepairFor } from '../../../lib/voice/voice-repair.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useEffectiveChatMode, useIsDesktop } from '../../../state/effective-chat-mode.js';
 import { useMindspaceStore } from '../../../state/mindspace.store.js';
@@ -1089,6 +1090,16 @@ export function ChatPage(): JSX.Element {
           providerSkips={voice.providerSkips}
           autoReadOn={autoReadAloud}
           voiceUnavailable={voiceUnavailable}
+          repair={(() => {
+            const fix = voiceUnavailable
+              ? voiceRepairFor(
+                  voiceUnavailable,
+                  effectivePersona?.id,
+                  `${location.pathname}${location.search}`,
+                )
+              : null;
+            return fix ? { label: fix.label, onSelect: () => navigate(fix.to) } : null;
+          })()}
           onPause={voice.pause}
           onResume={voice.resumeAudio}
           onSkip={voice.skip}

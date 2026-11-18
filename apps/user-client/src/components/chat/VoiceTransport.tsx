@@ -17,6 +17,9 @@ export interface VoiceTransportProps {
    *  reason renders a greyed-with-reason surface rather than silently retracting
    *  (disabled over hidden). */
   voiceUnavailable: DisabledReason;
+  /** The page that fixes `voiceUnavailable`, offered beside its note (spec
+   *  0.5.0 papercuts, item 2). The caller routes it by reason. */
+  repair?: { label: string; onSelect: () => void } | null;
   onPause: () => void;
   onResume: () => void;
   onSkip: () => void;
@@ -37,7 +40,7 @@ export interface VoiceTransportProps {
 }
 
 function unavailableNote(reason: DisabledReason): string {
-  if (reason === 'no-provider') return 'Voice unavailable — no provider configured';
+  if (reason === 'no-provider') return 'Voice unavailable — no voice provider set up';
   if (reason === 'voices-unavailable') return VOICES_UNAVAILABLE_COPY;
   return 'Voice unavailable — this persona has no voice';
 }
@@ -197,6 +200,11 @@ export function VoiceTransport(p: VoiceTransportProps): JSX.Element | null {
       {note || p.resumeOffer ? (
         <div className="voice-transport-note" aria-live="polite">
           {note ? <span>{note}</span> : null}
+          {unavailableArmed && !monologue && p.repair ? (
+            <button type="button" className="voice-transport-startover" onClick={p.repair.onSelect}>
+              {p.repair.label}
+            </button>
+          ) : null}
           {p.resumeOffer ? (
             <button
               type="button"

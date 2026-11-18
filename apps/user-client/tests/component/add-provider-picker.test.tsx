@@ -22,8 +22,8 @@ import { AddProviderPicker } from '../../src/components/AddProviderPicker.js';
 
 const noop = () => {};
 
-function renderPicker(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+function renderPicker(ui: React.ReactElement, url = '/app/settings/providers?return=/app') {
+  return render(<MemoryRouter initialEntries={[url]}>{ui}</MemoryRouter>);
 }
 
 describe('AddProviderPicker', () => {
@@ -64,7 +64,9 @@ describe('AddProviderPicker', () => {
     const links = screen.getAllByRole('link', { name: /open server linking/i });
     expect(links.length).toBeGreaterThan(0);
     // biome-ignore lint/style/noNonNullAssertion: getAllByRole returns a non-empty array here
-    expect(links[0]!.getAttribute('href')).toBe('/app/account/server-linking');
+    expect(links[0]!.getAttribute('href')).toBe(
+      `/app/account/server-linking?return=${encodeURIComponent('/app/settings/providers?return=/app')}`,
+    );
   });
 
   it('enables proxy-providers when a proxy is set, and picks one', () => {

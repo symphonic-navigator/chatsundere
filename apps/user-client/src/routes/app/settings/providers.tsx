@@ -7,7 +7,7 @@ import {
   providersContributing,
 } from '@chatsundere/llm-unified';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AddProviderPicker } from '../../../components/AddProviderPicker.js';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
 import { ServerRelayStatus } from '../../../components/ServerRelayStatus.js';
@@ -15,6 +15,7 @@ import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../../../lib/built-in-providers.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds } from '../../../lib/usable-providers.js';
 
@@ -22,6 +23,13 @@ import { usableTemplateIds } from '../../../lib/usable-providers.js';
 export function SettingsProvidersPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings-providers');
   const navigate = useNavigate();
+  const location = useLocation();
+  const [search] = useSearchParams();
+  // The provider page's Back (and its post-save return) comes to this list
+  // with its own `?return=` intact, so the list's Back still goes home.
+  const here = encodeURIComponent(`${location.pathname}${location.search}`);
+  const openProvider = (templateId: string): void =>
+    navigate(`/app/settings/providers/${templateId}?return=${here}`);
   const providers = useProviders();
   const proxyGate = useServerGate('proxy');
   const [picking, setPicking] = useState(false);
@@ -61,7 +69,7 @@ export function SettingsProvidersPage(): JSX.Element {
   return (
     <PageScaffold
       crumbs={[{ label: 'My Settings', to: '/app/settings' }, { label: 'AI Providers' }]}
-      back="/app/settings"
+      back={safeReturnPath(search.get('return'), '/app/settings')}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -85,7 +93,7 @@ export function SettingsProvidersPage(): JSX.Element {
               <button
                 key={row.id}
                 type="button"
-                onClick={() => navigate(`/app/settings/providers/${row.templateId}`)}
+                onClick={() => openProvider(row.templateId)}
                 className="flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-3 text-left hover:bg-white/[0.04]"
               >
                 <div className="grid h-10 w-10 place-items-center rounded-md bg-white/5 font-display text-sm text-paper">
@@ -121,7 +129,7 @@ export function SettingsProvidersPage(): JSX.Element {
             hasProxy={hasProxy}
             onPick={(id: ProviderTemplateId) => {
               setPicking(false);
-              navigate(`/app/settings/providers/${id}`);
+              openProvider(id);
             }}
             onClose={() => setPicking(false)}
           />

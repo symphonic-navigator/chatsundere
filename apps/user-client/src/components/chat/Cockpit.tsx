@@ -3,7 +3,7 @@ import type { Offering } from '@chatsundere/llm-unified';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Bookmark, Brain, Gem, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { classifyFile } from '../../attachments/file-classify.js';
 import { normaliseImageForLlm } from '../../attachments/image-normalise.js';
 import type { AttachmentRow, PersonaRow } from '../../boot/client-data-db.js';
@@ -29,6 +29,7 @@ import { useActiveSearchTiers } from '../../lib/use-active-search-tiers.js';
 import { useDismissOnOutside } from '../../lib/use-dismiss-on-outside.js';
 import type { Dictation } from '../../lib/voice/dictation/use-dictation.js';
 import { type TtsUnavailableReason, VOICES_UNAVAILABLE_COPY } from '../../lib/voice/resolve-tts.js';
+import { LIVE_VOICE_TOOLTIP, VOICE_NOTE, voiceRepairFor } from '../../lib/voice/voice-repair.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
 import {
   DESKTOP_MEDIA_QUERY,
@@ -132,6 +133,9 @@ export function Cockpit(p: Props): JSX.Element {
   const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [voiceNote, setVoiceNote] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Every repair link leaving the chat carries the chat as `?return=`.
+  const returnTo = `${location.pathname}${location.search}`;
   const { isPinned } = useEffectiveChatMode();
   const isDesktop = useIsDesktop();
   const togglePin = useCurrentChatStore((s) => s.togglePin);
@@ -514,7 +518,7 @@ export function Cockpit(p: Props): JSX.Element {
             voiceRetryable
               ? VOICES_UNAVAILABLE_COPY
               : p.voiceUnavailable
-                ? 'No voice provider — set one in Settings → Voice'
+                ? LIVE_VOICE_TOOLTIP[p.voiceUnavailable]
                 : 'Live voice mode'
           }
           aria-label="Live voice mode"
@@ -669,7 +673,10 @@ export function Cockpit(p: Props): JSX.Element {
       {artefactExpertError ? (
         <div className="cockpit-artefact-note" role="alert">
           <span>{artefactExpertError}</span>
-          <button type="button" onClick={() => navigate('/app/settings/expert')}>
+          <button
+            type="button"
+            onClick={() => navigate(`/app/settings/expert?return=${encodeURIComponent(returnTo)}`)}
+          >
             Settings
           </button>
           <button type="button" onClick={() => setArtefactExpertError(null)}>
@@ -677,20 +684,36 @@ export function Cockpit(p: Props): JSX.Element {
           </button>
         </div>
       ) : null}
-      {voiceNote && p.voiceUnavailable ? (
-        <output className="cockpit-dictation-note">
-          <span>
-            {p.voiceUnavailable === 'no-provider'
-              ? 'No voice yet — set up a voice provider to read replies aloud.'
-              : p.voiceUnavailable === 'voices-unavailable'
-                ? VOICES_UNAVAILABLE_COPY
-                : 'No voice yet — give this companion a voice to read replies aloud.'}
-          </span>
-          <button type="button" onClick={() => navigate('/app/settings')}>
-            Settings → Voice
-          </button>
-        </output>
-      ) : null}
+      {voiceNote && p.voiceUnavailable
+        ? (() => {
+            const repair = voiceRepairFor(p.voiceUnavailable, p.persona.id, returnTo);
+            return (
+              <output className="cockpit-dictation-note">
+                <span>{VOICE_NOTE[p.voiceUnavailable]}</span>
+                {voiceRetryable ? (
+                  <button
+                    type="button"
+                    disabled={recheckingVoice !== null}
+                    onClick={() => recheckVoice('autoread')}
+                  >
+                    Try again
+                  </button>
+                ) : null}
+                {repair ? (
+                  voiceRetryable ? (
+                    <Link to={repair.to} className="underline">
+                      {repair.label}
+                    </Link>
+                  ) : (
+                    <button type="button" onClick={() => navigate(repair.to)}>
+                      {repair.label}
+                    </button>
+                  )
+                ) : null}
+              </output>
+            );
+          })()
+        : null}
       {editing ? (
         <output className="cockpit-edit-banner">
           <span>

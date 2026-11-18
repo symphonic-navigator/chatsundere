@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { PersonaRow } from '../../boot/client-data-db.js';
 import { PersonaAvatar } from '../../components/PersonaAvatar.js';
 import { StreamingOrb } from '../../components/StreamingOrb.js';
@@ -21,6 +21,7 @@ import { useProviders } from '../../data/providers.js';
 import { useSettings } from '../../data/settings.js';
 import { DEFAULT_PERSONA_INSTRUCTIONS } from '../../lib/persona-defaults.js';
 import { FONT_VAR } from '../../lib/persona-font.js';
+import { safeReturnPath } from '../../lib/safe-return.js';
 import { useMindspaceStore } from '../../state/mindspace.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 
@@ -37,6 +38,12 @@ import { useClass2Gate } from '../../sync/gate.js';
  */
 export function Circle(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [search] = useSearchParams();
+  // Opened from a chat's quick menu, Back returns to that chat.
+  const back = safeReturnPath(search.get('return'), '/app');
+  // Side trips from here pass this page's full URL, so they unwind one step at a time.
+  const here = encodeURIComponent(`${location.pathname}${location.search}`);
   const { onHelp, helpOverlay } = useHelp('circle');
   const personas = useFilteredPersonas();
   const providers = useProviders();
@@ -80,7 +87,7 @@ export function Circle(): JSX.Element {
   const sortedPersonas = (personas.data ?? []).slice().sort(compareByLastInteraction);
 
   return (
-    <PageScaffold crumbs={[{ label: 'My Circle' }]} back="/app" onHelp={onHelp}>
+    <PageScaffold crumbs={[{ label: 'My Circle' }]} back={back} onHelp={onHelp}>
       {helpOverlay}
       <div className="flex flex-col gap-2 px-4 pb-12 pt-3" data-testid="my-circle">
         <button
@@ -125,7 +132,7 @@ export function Circle(): JSX.Element {
             { separator: true },
             {
               label: 'Go to persona',
-              onSelect: () => navigate(`/app/persona/${p.id}`),
+              onSelect: () => navigate(`/app/persona/${p.id}?return=${here}`),
             },
             {
               label: 'Delete…',
@@ -141,7 +148,7 @@ export function Circle(): JSX.Element {
               <button
                 type="button"
                 className="cs-row-main"
-                onClick={() => navigate(`/app/persona/${p.id}`)}
+                onClick={() => navigate(`/app/persona/${p.id}?return=${here}`)}
               >
                 <span className="cs-row-leading">
                   <span className="history-avatar">
@@ -172,7 +179,7 @@ export function Circle(): JSX.Element {
                   <button
                     type="button"
                     className="rounded-full bg-danger/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-danger"
-                    onClick={() => navigate('/app/settings/providers')}
+                    onClick={() => navigate(`/app/settings/providers?return=${here}`)}
                   >
                     Provider missing
                   </button>

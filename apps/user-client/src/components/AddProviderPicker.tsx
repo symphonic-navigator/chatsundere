@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { getProvider, providerServiceKinds } from '@chatsundere/llm-unified';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BUILT_IN_PROVIDERS, type ProviderTemplateId } from '../lib/built-in-providers.js';
 import { useServerGate } from '../lib/server-gate.js';
 import { CapBadgeRow } from './CapBadgeRow.js';
@@ -25,6 +25,11 @@ export function AddProviderPicker({
   onClose: () => void;
 }): JSX.Element {
   const proxyGate = useServerGate('proxy');
+  const location = useLocation();
+  // Server linking's Back brings the user to this list (its own `?return=` intact).
+  const linkingTo = `/app/account/server-linking?return=${encodeURIComponent(
+    `${location.pathname}${location.search}`,
+  )}`;
   const configured = new Set(configuredTemplateIds);
   const candidates = BUILT_IN_PROVIDERS.filter((b) => !configured.has(b.id)).sort((a, b) => {
     const [fa, pa] = rankKey(a.id);
@@ -88,7 +93,7 @@ export function AddProviderPicker({
                 </button>
                 {blocked ? (
                   <Link
-                    to="/app/account/server-linking"
+                    to={linkingTo}
                     onClick={onClose}
                     className="mt-1 ml-12 block text-[11px] text-aurora-200 underline"
                   >

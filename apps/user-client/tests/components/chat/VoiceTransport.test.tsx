@@ -154,3 +154,38 @@ describe('VoiceTransport voices-unavailable', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('VoiceTransport repair link (spec 0.5.0 papercuts, item 2)', () => {
+  it('armed-but-unavailable offers the repair beside the note', () => {
+    const onSelect = vi.fn();
+    render(
+      <VoiceTransport
+        state="idle"
+        {...props()}
+        autoReadOn
+        voiceUnavailable="no-voice"
+        repair={{ label: 'Choose a voice', onSelect }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a voice' }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the voice provider when none is set up', () => {
+    render(<VoiceTransport state="idle" {...props()} autoReadOn voiceUnavailable="no-provider" />);
+    expect(screen.getByText(/no voice provider set up/i)).toBeInTheDocument();
+  });
+
+  it('offers no repair while voice is available', () => {
+    render(
+      <VoiceTransport
+        state="idle"
+        {...props()}
+        autoReadOn
+        voiceUnavailable={null}
+        repair={{ label: 'Set up voice', onSelect: vi.fn() }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Set up voice' })).toBeNull();
+  });
+});
