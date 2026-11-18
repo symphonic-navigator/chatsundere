@@ -65,6 +65,7 @@ import { queryClient } from '../lib/queryClient.js';
 import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
+import { deviceOffsetMinutes } from '../lib/time-awareness.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, TOOL_ROUND_LIMIT_NUDGE, runToolLoop } from '../lib/tool-loop.js';
@@ -461,6 +462,9 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
           role: 'user',
           contentBlocks: [{ type: 'text', text: args.userText }],
           createdAt: now,
+          // Stored once so the turn's stamp renders the same bytes on every
+          // device and after travel (time-export-motion spec A2).
+          utcOffsetMinutes: deviceOffsetMinutes(now),
           updatedAt: now,
           bookmarked: false,
           streamingState: 'complete',
