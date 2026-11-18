@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { prefersReducedMotion } from '../../lib/reduced-motion.js';
 import { TagEditor } from '../artefact/TagEditor.js';
 import { BlobImage } from '../blob/BlobImage.js';
 import { CopyButton } from '../chat/markdown/CopyButton.js';
@@ -114,7 +115,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   // biome-ignore lint/correctness/useExhaustiveDependencies: open zoom is a mount-only effect
   useLayoutEffect(() => {
     const el = surfaceRef.current;
-    if (!el || reducedMotion()) return;
+    if (!el || prefersReducedMotion()) return;
     const to = el.getBoundingClientRect();
     if (to.width === 0 || to.height === 0) return;
     const live = p.getOriginRect?.(p.items[p.index]?.id ?? '') ?? null;
@@ -180,13 +181,6 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
 
   const DURATION = 220;
 
-  function reducedMotion(): boolean {
-    return (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    );
-  }
-
   function rectVisible(r: DOMRect | null): r is DOMRect {
     return (
       !!r &&
@@ -216,7 +210,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     if (closingRef.current) return;
     closingRef.current = true;
     const el = surfaceRef.current;
-    if (!el || reducedMotion()) {
+    if (!el || prefersReducedMotion()) {
       p.onClose();
       return;
     }

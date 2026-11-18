@@ -4,6 +4,7 @@ import { uuidv7 } from 'uuidv7';
 import { type ContentBlock, getClientDataDb } from '../boot/client-data-db.js';
 import { buildDroppedHint } from '../lib/chatsune-import/dropped-hint.js';
 import type { ThirdPartyConversation } from '../lib/third-party-import/types.js';
+import { deviceOffsetMinutes } from '../lib/time-awareness.js';
 import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 
@@ -66,6 +67,9 @@ export async function importThirdPartyConversations(
           updatedAt: stamp,
           bookmarked: false,
           streamingState: 'complete' as const,
+          // Fixed once at import: a row without an offset would fall back to the
+          // device zone on every replay and shift its stamp when the zone does.
+          ...(m.role === 'user' ? { utcOffsetMinutes: deviceOffsetMinutes(stamp) } : {}),
         };
       });
 

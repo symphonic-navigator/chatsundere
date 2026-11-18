@@ -351,6 +351,19 @@ h1 {
       opacity: 1;
     }
   }
+  /* The static end states, for the in-app switch: keyframes cannot be
+     selector-scoped, and these run from inline styles. !important outranks
+     the animation while it still runs, so animationend keeps firing. */
+  [style*="wizard-step-in"] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  [style*="badge-pulse"] {
+    transform: none !important;
+  }
+  [style*="recovery-reveal"] {
+    opacity: 1 !important;
+  }
 }
 
 @keyframes mindspace-float1 {

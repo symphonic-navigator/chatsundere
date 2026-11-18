@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { useContext, useEffect, useRef, useState } from 'react';
+import { prefersReducedMotion } from '../lib/reduced-motion.js';
 import { SplashContext } from './SplashContext.js';
 
 // Detect hard-reload (Ctrl+F5 / Ctrl+Shift+R). Browsers route hard-reloads
@@ -70,7 +71,7 @@ export function SplashOverlay(): JSX.Element | null {
 
   useEffect(() => {
     if (!show) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (prefersReducedMotion()) return;
 
     let cancelled = false;
     const flipTimer = window.setTimeout(() => {

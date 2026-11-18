@@ -2,8 +2,10 @@
 import { motion } from '@chatsundere/ui-shared';
 import type React from 'react';
 import { useMemo } from 'react';
+import { useReducedMotion } from '../lib/reduced-motion.js';
 
 export function BreathingOrb({ seed }: { seed?: number }) {
+  const reducedMotion = useReducedMotion();
   // Deterministic per mount when no seed; jitter is per-instance.
   const params = useMemo(() => {
     const rng = motion.seedRandom(seed ?? Math.random() * 1e9);
@@ -24,9 +26,7 @@ export function BreathingOrb({ seed }: { seed?: number }) {
     top: `${params.top}%`,
     left: `${params.left}%`,
     background: 'radial-gradient(circle, var(--color-aurora-500), transparent 70%)',
-    animation: motion.respectsReducedMotion()
-      ? 'none'
-      : `breathe ${params.period}s ease-in-out infinite alternate`,
+    animation: reducedMotion ? 'none' : `breathe ${params.period}s ease-in-out infinite alternate`,
     '--drift': `${params.drift}px`,
   };
 

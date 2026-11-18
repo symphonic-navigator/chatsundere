@@ -66,6 +66,7 @@ import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
 import { focusMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
+import { resolveTimeAwareness } from '../../../lib/time-awareness.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
@@ -82,6 +83,7 @@ import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { mutateSynced } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { useChatExport } from './use-chat-export.js';
 import { useComposerDraft } from './use-composer-draft.js';
 import { buildEditOrchestration, resolveSendAction } from './use-edit-orchestration.js';
 
@@ -371,6 +373,14 @@ export function ChatPage(): JSX.Element {
   const diagnosticsReport = useStreamManagerStore((s) =>
     activeChatId ? (s.diagnostics.get(activeChatId) ?? null) : null,
   );
+  const chatExport = useChatExport({
+    open: quickMenuAnchor !== null,
+    chatId: activeChatId,
+    personaName: effectivePersona?.name ?? null,
+    // The file names the user "You" without a display name (spec B2), not by username.
+    userName: settingsQuery.data?.displayName ?? '',
+    streamingMessageId: streamHandle?.draftMessageId ?? null,
+  });
   const [diagOpen, setDiagOpen] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — closing a stale diagnostics overlay when the chat changes
   useEffect(() => {
@@ -441,6 +451,7 @@ export function ChatPage(): JSX.Element {
       return { usedTokens: 0, systemTokens: 0 };
     // Guard against personas with empty instructions — buildPrompt throws on empty.
     if (!effectivePersona.instructions.trim()) return { usedTokens: 0, systemTokens: 0 };
+    const stamped = resolveTimeAwareness(effectivePersona);
     const sys = buildPrompt(
       {
         tonalityEnabled: effectivePersona.chatsundereTonality,
@@ -459,6 +470,7 @@ export function ChatPage(): JSX.Element {
         modelInstructions: resolveModelInstructions(offering),
         // Mirror the real send so the context gauge counts the same prompt.
         screenEffectsEnabled: settingsQuery.data.screenEffectsEnabled ?? true,
+        time: stamped ? { mode: 'chat' } : undefined,
       },
       'chat',
     );
@@ -468,7 +480,7 @@ export function ChatPage(): JSX.Element {
     const pillsById = new Map((chatQuery.data?.pills ?? []).map((p) => [p.id, p]));
     const historyTokens = (chatQuery.data?.messages ?? [])
       .filter(isContextMessage)
-      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments), 0);
+      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments, stamped), 0);
     const systemTokens = estimateTokens(sys);
     return { usedTokens: systemTokens + historyTokens, systemTokens };
   }, [
@@ -1356,6 +1368,8 @@ export function ChatPage(): JSX.Element {
         onClose={closeQuickMenu}
         onEntranceHall={onExitToEntranceHall}
         onNavigate={(to) => navigate(to)}
+        exportState={chatExport.exportState}
+        onExport={chatExport.onExport}
       />
     </div>
   );

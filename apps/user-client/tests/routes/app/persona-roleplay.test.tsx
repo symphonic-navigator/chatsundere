@@ -72,6 +72,10 @@ function renderPage(personaId: string) {
         <Routes>
           <Route path="/app/persona/:id/roleplay" element={<PersonaRoleplay />} />
           <Route
+            path="/app/persona/:id/model"
+            element={<div data-testid="persona-model-sentinel">model</div>}
+          />
+          <Route
             path="/app/persona/:id"
             element={<div data-testid="persona-hub-sentinel">hub</div>}
           />
@@ -330,5 +334,35 @@ describe('PersonaRoleplay — Greeting rules textarea', () => {
         greetingInstructions: 'Greet warmly as a pirate.',
       }),
     );
+  });
+});
+
+describe('PersonaRoleplay — time cross-reference', () => {
+  const NOTE = /roleplay characters don't know the date and time/i;
+
+  it('shows the note with a link to Model behaviour while roleplay is on and time unset', async () => {
+    state.persona = { ...BASE_PERSONA, roleplay: true };
+    renderPage('p-1');
+    await waitFor(() => expect(screen.getByText(NOTE)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('link', { name: /^model behaviour$/i }));
+    await waitFor(() => expect(screen.getByTestId('persona-model-sentinel')).toBeInTheDocument());
+  });
+
+  it('hides the note when roleplay is off', async () => {
+    state.persona = { ...BASE_PERSONA, roleplay: false };
+    renderPage('p-1');
+    await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  it('hides the note once the owner has set the switch', async () => {
+    state.persona = {
+      ...BASE_PERSONA,
+      roleplay: true,
+      timeAwareness: false,
+    } as typeof BASE_PERSONA;
+    renderPage('p-1');
+    await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
+    expect(screen.queryByText(NOTE)).toBeNull();
   });
 });
