@@ -2,6 +2,7 @@
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { withReturn } from '../../lib/safe-return.js';
 import { type CheckResult, checkServer } from '../../mcp/oauth/check-server.js';
 import { Button } from '../ui/Button.js';
 import { hostOf } from './sign-in-copy.js';
@@ -177,13 +178,7 @@ export function CheckServerStep(props: {
           <FailureMessage
             failure={failure}
             linked={linked}
-            onLink={() =>
-              navigate(
-                props.returnTo
-                  ? `/app/account/server-linking?return=${encodeURIComponent(props.returnTo)}`
-                  : '/app/account/server-linking',
-              )
-            }
+            onLink={() => navigate(withReturn('/app/account/server-linking', props.returnTo))}
           />
           <Button tone="neutral" className="self-start" onClick={() => void onCheck()}>
             Try again

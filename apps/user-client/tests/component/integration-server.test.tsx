@@ -9,6 +9,7 @@ const {
   checkServerMock,
   testOAuthMock,
   removeGrantMock,
+  finishOrphanedMock,
   consentMock,
   consentForMock,
   grants,
@@ -23,6 +24,7 @@ const {
   checkServerMock: vi.fn(),
   testOAuthMock: vi.fn(),
   removeGrantMock: vi.fn(),
+  finishOrphanedMock: vi.fn(async () => undefined),
   consentMock: vi.fn(async () => undefined),
   consentForMock: vi.fn(async () => undefined),
   grants: { rows: [] as unknown[] },
@@ -89,6 +91,7 @@ vi.mock('../../src/mcp/oauth/sign-in-session.js', () => ({
 vi.mock('../../src/mcp/oauth/sign-in.js', async (orig) => ({
   ...(await orig<typeof import('../../src/mcp/oauth/sign-in.js')>()),
   removeGrant: (...a: unknown[]) => removeGrantMock(...a),
+  finishOrphanedSignIns: (...a: unknown[]) => finishOrphanedMock(...(a as [])),
 }));
 vi.mock('../../src/components/mcp/OAuthSignInFlow.js', () => ({
   OAuthSignInFlow: (p: Record<string, unknown>) => {
@@ -1456,6 +1459,7 @@ describe('the way back to the chat (spec §5.5)', () => {
     testOAuthMock.mockReset();
     testOAuthMock.mockResolvedValue(CONNECTED);
     removeGrantMock.mockReset();
+    finishOrphanedMock.mockClear();
     grants.rows = [];
     pending.rows = [];
     gates.proxy = true;
@@ -1483,14 +1487,14 @@ describe('the way back to the chat (spec §5.5)', () => {
     ])('Back on the check goes %s', async (_label, search, target) => {
       wrapWay(`/app/integrations/new${search}`);
       fireEvent.click(backButton());
-      await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent(target));
+      await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
     });
 
     it('Back on Sign-in required goes to the chat', async () => {
       await toSignIn(RETURN);
       fireEvent.click(backButton());
       expect(await screen.findByText('chat page')).toBeTruthy();
-      expect(screen.getByTestId('path')).toHaveTextContent(CHAT);
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
     });
 
     it('Back during the sign-in goes to the chat', async () => {
@@ -1511,7 +1515,7 @@ describe('the way back to the chat (spec §5.5)', () => {
       await toFlow(RETURN);
       fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
       expect(await screen.findByText('chat page')).toBeTruthy();
-      expect(screen.getByTestId('path')).toHaveTextContent(CHAT);
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
       expect(toastMessages()).toContain(
         'Kumbu is connected. Its tools are ready on your next message.',
       );
@@ -1521,9 +1525,8 @@ describe('the way back to the chat (spec §5.5)', () => {
       await toFlow('');
       fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
       await waitFor(() =>
-        expect(screen.getByTestId('path')).toHaveTextContent('/app/integrations/new-id'),
+        expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new-id'),
       );
-      expect(screen.getByTestId('path').textContent).toBe('/app/integrations/new-id');
       expect(toastMessages()).toEqual([]);
     });
 
@@ -1533,6 +1536,50 @@ describe('the way back to the chat (spec §5.5)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
       expect(await screen.findByText('chat page')).toBeTruthy();
       expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+    });
+
+    it('saving later with a return retries the save, as the list would', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('saving later still goes to the chat when the retry fails', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      finishOrphanedMock.mockRejectedValueOnce(new Error('still offline'));
+      await toFlow(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('saving later without a return leaves the retry to My Integrations', async () => {
+      upsertMock.mockRejectedValueOnce(new Error('offline'));
+      await toFlow('');
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('integrations list')).toBeTruthy();
+      expect(finishOrphanedMock).not.toHaveBeenCalled();
+    });
+
+    it('OAuth connected with On by default off says only that it is connected', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'On by default' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Kumbu is connected.']);
+    });
+
+    it('a saved key server with On by default off says only that it is added', async () => {
+      checkServerMock.mockResolvedValue(KEY);
+      wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'On by default' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['kumbu.example is added.']);
     });
 
     it('a saved key server goes to the chat, with the added toast', async () => {
@@ -1603,7 +1650,7 @@ describe('the way back to the chat (spec §5.5)', () => {
       wrapWay(`/app/integrations/new${RETURN}`, PROPOSED);
       fireEvent.click(await screen.findByRole('button', { name: 'Link a server' }));
       expect(await screen.findByText('server linking')).toBeTruthy();
-      expect(screen.getByTestId('linking-return')).toHaveTextContent(CHAT);
+      expect(screen.getByTestId('linking-return').textContent).toBe(CHAT);
     });
 
     it('Link a server without a return carries none', async () => {
@@ -1652,13 +1699,27 @@ describe('the way back to the chat (spec §5.5)', () => {
       await waitFor(() => expect(screen.getByTestId('path').textContent).toBe(target));
     });
 
-    it('Use a key instead keeps the return for Save and Back', async () => {
+    it('Use a key instead keeps the return for Back', async () => {
       await toSignIn(RETURN);
       fireEvent.click(screen.getByRole('button', { name: 'Use a key instead' }));
       expect(screen.getByLabelText('Authentication')).toHaveValue('bearer');
-      expect(screen.getByTestId('path')).toHaveTextContent(`/app/integrations/new${RETURN}`);
+      expect(screen.getByTestId('path').textContent).toBe(`/app/integrations/new${RETURN}`);
       fireEvent.click(backButton());
       expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+    });
+
+    it('Use a key instead keeps the return for Save, with the added toast', async () => {
+      await toSignIn(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'Use a key instead' }));
+      fireEvent.change(await screen.findByLabelText('Key'), { target: { value: 'k' } });
+      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
+      expect(upsertMock).toHaveBeenCalled();
+      expect(toastMessages()).toContain(
+        'kumbu.example is added. Its tools are ready on your next message.',
+      );
     });
 
     it('Use a key instead during the sign-in keeps the return for Save', async () => {
@@ -1843,7 +1904,9 @@ describe('the way back to the chat (spec §5.5)', () => {
     });
 
     it('a reconnect goes to the chat, named after its row', async () => {
-      useMcpServersMock.mockReturnValue({ data: [{ ...ROW, id: 'new-id', name: 'Notes' }] });
+      useMcpServersMock.mockReturnValue({
+        data: [{ ...ROW, id: 'new-id', name: 'Notes', onByDefault: true }],
+      });
       await waiting(RETURN);
       fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
       expect(await screen.findByText('chat page')).toBeTruthy();
@@ -1852,20 +1915,51 @@ describe('the way back to the chat (spec §5.5)', () => {
       );
     });
 
-    it('saving later goes to the chat, with the saving-later toast', async () => {
+    it('a reconnect of a server not on by default says only that it is connected', async () => {
+      useMcpServersMock.mockReturnValue({ data: [{ ...ROW, id: 'new-id', name: 'Notes' }] });
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['Notes is connected.']);
+    });
+
+    it('a reconnect whose row has not loaded is named after its grant’s host', async () => {
+      useMcpServersMock.mockReturnValue({ data: undefined as unknown as unknown[] });
+      pending.rows = [
+        { state: 'st-9', serverId: 'new-id', isNewServer: false, name: '', createdAt: 1 },
+      ];
+      grants.rows = [{ id: 'new-id', resource: 'https://kumbu.example/mcp' }];
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual(['kumbu.example is connected.']);
+    });
+
+    it('a reconnect with nothing to name it by goes to the chat without a toast', async () => {
+      useMcpServersMock.mockReturnValue({ data: undefined as unknown as unknown[] });
+      await waiting(RETURN);
+      fireEvent.click(screen.getByRole('button', { name: 'stub connected' }));
+      expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(toastMessages()).toEqual([]);
+    });
+
+    it('saving later goes to the chat, with the saving-later toast, and retries the save', async () => {
       upsertMock.mockRejectedValueOnce(new Error('offline'));
       await waiting(RETURN);
       fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
       expect(await screen.findByText('chat page')).toBeTruthy();
+      expect(screen.getByTestId('path').textContent).toBe(CHAT);
       expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+      expect(finishOrphanedMock).toHaveBeenCalledTimes(1);
     });
 
-    it('saving later without a return goes to My Integrations', async () => {
+    it('saving later without a return goes to My Integrations, which retries the save', async () => {
       upsertMock.mockRejectedValueOnce(new Error('offline'));
       await waiting('');
       fireEvent.click(screen.getByRole('button', { name: 'stub resumed connected' }));
       expect(await screen.findByText('integrations list')).toBeTruthy();
       expect(toastMessages()).toEqual(['Connected. Saving will finish shortly.']);
+      expect(finishOrphanedMock).not.toHaveBeenCalled();
     });
 
     it.each([

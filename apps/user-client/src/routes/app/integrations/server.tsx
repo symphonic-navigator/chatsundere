@@ -11,6 +11,8 @@ import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
 import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
 import {
   SAVING_LATER,
+  addedToast,
+  connectedToast,
   hostOf,
   reconnectCheckMessage,
 } from '../../../components/mcp/sign-in-copy.js';
@@ -33,14 +35,18 @@ import {
   useMcpServers,
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
-import { safeReturnPath } from '../../../lib/safe-return.js';
+import { readReturnTo, withReturn } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
 import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
 import type { OAuthDiscovery } from '../../../mcp/oauth/discovery.js';
 import { createSignInDeps, waitingScreenPath } from '../../../mcp/oauth/sign-in-session.js';
-import { type ServerDraft, removeGrant } from '../../../mcp/oauth/sign-in.js';
+import {
+  type ServerDraft,
+  finishOrphanedSignIns,
+  removeGrant,
+} from '../../../mcp/oauth/sign-in.js';
 import { statusOf } from '../../../mcp/server-status.js';
 import { sanitiseToolName } from '../../../mcp/tool-naming.js';
 import type {
@@ -59,31 +65,10 @@ type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
 /** `statusOf`'s line for an OAuth row that needs a server this account has not linked. */
 const NEEDS_LINKED_SERVER = '○ Needs a linked Chatsundere server';
 
-const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as const;
-const LIST = '/app/integrations';
-
-/**
- * The page a `?return=` names, or null when there is none or it is not a site-relative
- * path (spec §5.5). It never leaves the device; it only steers this page's exits.
- */
-export function readReturnTo(search: URLSearchParams): string | null {
-  return safeReturnPath(search.get('return'), '') || null;
-}
-
-/** `path` with the same `?return=`, so the next page comes home too. */
-export function withReturn(path: string, returnTo: string | null): string {
-  return returnTo ? `${path}?return=${encodeURIComponent(returnTo)}` : path;
-}
-
-/** Shown on the chat after a server from the chat was connected (OAuth). */
-export function connectedToast(name: string): string {
-  return `${name} is connected. Its tools are ready on your next message.`;
-}
-
-/** Shown on the chat after a key or open server from the chat was saved. */
-function addedToast(name: string): string {
-  return `${name} is added. Its tools are ready on your next message.`;
-}
+/** My Integrations, where the flow's exits go when there is no chat to return to. */
+export const INTEGRATIONS_LIST = '/app/integrations';
+/** The root crumb of every page under My Integrations. */
+export const INTEGRATIONS_CRUMB = { label: 'My Integrations', to: INTEGRATIONS_LIST } as const;
 
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
@@ -104,8 +89,8 @@ export function IntegrationServerPage(): JSX.Element {
   if (serverId && !servers.data) {
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: 'Loading…' }]}
-        back={returnTo ?? LIST}
+        crumbs={[INTEGRATIONS_CRUMB, { label: 'Loading…' }]}
+        back={returnTo ?? INTEGRATIONS_LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -119,8 +104,8 @@ export function IntegrationServerPage(): JSX.Element {
   if (serverId && !existing) {
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: 'Unknown' }]}
-        back={returnTo ?? LIST}
+        crumbs={[INTEGRATIONS_CRUMB, { label: 'Unknown' }]}
+        back={returnTo ?? INTEGRATIONS_LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -263,9 +248,11 @@ function AddServer({
           test: (row) => testOAuthConnection(row, hasProxy),
         });
       } catch {
-        // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
+        // The grant exists; finishOrphanedSignIns saves the row from the draft. My
+        // Integrations runs it on load, but the chat does not, so a return retries here.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        navigate(returnTo ?? LIST);
+        if (returnTo) void finishOrphanedSignIns().catch(() => undefined);
+        navigate(returnTo ?? INTEGRATIONS_LIST);
         return;
       }
     }
@@ -273,16 +260,23 @@ function AddServer({
       navigate(`/app/integrations/${serverId}`);
       return;
     }
-    const name = rows.find((r) => r.id === serverId)?.name ?? draft?.name ?? hostOfLink(link);
-    if (name)
-      toastStore.show({ message: connectedToast(name), tone: 'success', durationMs: 6_000 });
+    const row = rows.find((r) => r.id === serverId);
+    const name = row?.name ?? draft?.name ?? hostOfLink(link);
+    const onByDefault = row?.onByDefault ?? draft?.onByDefault ?? false;
+    if (name) {
+      toastStore.show({
+        message: connectedToast(name, onByDefault),
+        tone: 'success',
+        durationMs: 6_000,
+      });
+    }
     navigate(returnTo);
   }
 
   return (
     <PageScaffold
-      crumbs={[CRUMB_ROOT, { label: 'Add MCP server' }]}
-      back={returnTo ?? LIST}
+      crumbs={[INTEGRATIONS_CRUMB, { label: 'Add MCP server' }]}
+      back={returnTo ?? INTEGRATIONS_LIST}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -434,7 +428,7 @@ function IntegrationServerForm({
   const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
-  const back = () => navigate(returnTo ?? LIST);
+  const back = () => navigate(returnTo ?? INTEGRATIONS_LIST);
 
   function buildAuth(key: string | null): McpAuthResolved | null {
     if (!key) return null;
@@ -606,7 +600,11 @@ function IntegrationServerForm({
       await upsert.mutateAsync(row);
       setDirty(false);
       if (returnTo && !existing) {
-        toastStore.show({ message: addedToast(name), tone: 'success', durationMs: 6_000 });
+        toastStore.show({
+          message: addedToast(name, onByDefault),
+          tone: 'success',
+          durationMs: 6_000,
+        });
       }
       back();
     } catch (e) {
@@ -681,7 +679,11 @@ function IntegrationServerForm({
     const detail = `/app/integrations/${existing.id}`;
     return (
       <PageScaffold
-        crumbs={[CRUMB_ROOT, { label: existing.name, to: detail }, { label: 'Sign in again' }]}
+        crumbs={[
+          INTEGRATIONS_CRUMB,
+          { label: existing.name, to: detail },
+          { label: 'Sign in again' },
+        ]}
         back={detail}
         // The flow shares the detail page's route, so going "there" means leaving the flow;
         // an opened sign-in stays pending, as the flow's own Back keeps it.
@@ -705,8 +707,8 @@ function IntegrationServerForm({
 
   return (
     <PageScaffold
-      crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add MCP server' }]}
-      back={returnTo ?? LIST}
+      crumbs={[INTEGRATIONS_CRUMB, { label: existing ? existing.name : 'Add MCP server' }]}
+      back={returnTo ?? INTEGRATIONS_LIST}
       onHelp={onHelp}
       dirty={dirty}
     >
