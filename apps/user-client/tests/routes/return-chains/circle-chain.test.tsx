@@ -92,6 +92,8 @@ function ChatStandIn(): JSX.Element {
         persona={{ id: 'p1', name: 'Fable', colour: '#fff' }}
         activeChatId="c1"
         returnTo={`${l.pathname}${l.search}`}
+        exportState="ready"
+        onExport={() => undefined}
         onClose={() => setOpen(false)}
         onEntranceHall={() => navigate('/app')}
         onNavigate={(to) => navigate(to)}
