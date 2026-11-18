@@ -18,7 +18,7 @@ After a passkey unlock from a cold start the session is active, but the session 
 
 **Reproduced** on 2026-11-18 by `apps/user-client/tests/routes/login-passkey-mk-observation.test.tsx` (from `feat/050-papercuts`; real local account, real P-256 passkey with PRF, software authenticator, the real Login page): 3 of 3 pass against `master`, that is, they pin the fault.
 
-**A second consequence found while reading (not reproduced):** `onboarding/invitation/confirm.tsx:136` decides "late link" by `!!localSession && !!localMk`. A local-only user who unlocked with a passkey and taps *Link to server* (`app/account/server-linking.tsx:151`) is therefore treated as a fresh PWA: the form asks for a new username, and on submit `wipeClientDataForFreshOnboarding` clears the device's client data before a new identity is created. The fix below removes this path too, because `localMk` is then set.
+**A second consequence found while reading (not reproduced):** `onboarding/invitation/confirm.tsx:136` decides "late link" by `!!localSession && !!localMk`. A local-only user who unlocked with a passkey and taps *Link to server* (`app/account/server-linking.tsx:151`) is therefore treated as a fresh PWA: the form asks for a new username, and on submit the join ends at the crypto flow's `conflict` backstop (`wipeClientDataForFreshOnboarding` leaves a device with a local account untouched, `boot/client-data-identity.ts:56`). No data is lost, but the user meets a dead end. The fix below makes `localMk` set, so the late-link branch is taken; §3.6 closes the new risk that opens there (Larissa F1, F2).
 
 ## 2. The decision
 
@@ -75,7 +75,10 @@ The passkey path now goes through the same store slots by the same function as t
 
 What the passkey path holds besides the MK is unchanged: the PRF output and the derived AMK live only in `loginWithLocalBiometric`'s frame, as the passphrase AMK lives only in `loginLocalWithPassphrase`'s. Neither path zeroises its AMK today; this unit does not change that and does not widen it.
 
-**Pre-existing in both paths, not changed here:** if `activateSession` throws after the unwrap (the identity guard), the freshly created session is neither stored nor closed, and its buffer is left to the garbage collector. A new unlock while a session is already active replaces it without closing the old one. Both are listed for Larissa to judge; the build does not touch them unless she rates them above low.
+**Pre-existing in both paths:**
+
+- **A failed `activateSession` is closed (fixed here, Larissa F3, low).** If `enforceClientDataIdentity` throws after the unwrap, the fresh session is today neither stored nor closed, and its MK waits for the garbage collector. `activateSession` wraps its body: on any throw before the store is written it calls `session.close()` (zeroing the caller's `mk` too, harmless because that attempt failed) and rethrows. Two lines in a file this unit already edits.
+- **A second unlock replaces the active session without closing the first (not fixed here, Larissa F4, low).** `/login` has no guard against an already active session. Proposed deferral row beside the custody row: "in `setSession`, when `mk` is passed and the stored session's `id` differs, close the previous one first; compare by `id`, never by object identity, because the late-link spread makes a new object around the same closure". Deferred because no ordinary flow reaches `/login` with a session open, and it belongs to the custody work.
 
 ### 3.5 Every other path that can activate a session
 
@@ -96,11 +99,19 @@ Searched for every `activateSession(` and `setSession(` call in `apps/` and `pac
 | Refresh (`lib/fetch.ts:180`, `updateAccessToken`) | no; spreads the session, `mk` slice untouched | no |
 | Admin client (`admin-client/src/routes/login/index.tsx:128`) | yes, passphrase only, with `mk` | no |
 
-### 3.6 Adjacent observations, not fixed here
+### 3.6 Late link after a passkey unlock (Larissa F1 and F2)
+
+The fix makes the late-link branch of `onboarding/invitation/confirm.tsx` reachable for a user who has not typed the passphrase for weeks. Two changes in that branch, nothing else in the file:
+
+1. **Prove the passphrase before linking (F1, medium).** Today `linkToServer` (`packages/crypto/src/flows/link-to-server.ts:40`) registers OPAQUE on the server with whatever was typed and never checks it against the local wrap; that was safe only because late link was reachable just after a passphrase unlock. A typo would now link the account with a server passphrase different from the local one, and every later `loginOnlineLinked` (one passphrase for both legs, `login-online-linked.ts:87`) would fail its server leg for good: a quietly split account. So before `linkToServer` the branch calls `loginLocalWithPassphrase({ db, passphrase })`, closes the session it returns at once, and on `wrong_passphrase` shows the existing inline passphrase error and stops, with no request sent. The second session's `close()` zeroes only its own fresh buffer, never the store's.
+2. **Land the store update on the live session (F2, medium).** After the `linkToServer` await the branch re-reads `useSessionStore.getState()` instead of using the `localSession` captured at render. If the session is gone meanwhile (sign-out, a refused interactive refresh, a wipe), the device is linked already: it still runs `setLinked` and `resetEngineStateForNewLink()`, then navigates to `/login` instead of calling `setSession`. Only with a live session does it call `setSession({ ...live, username, mode: 'linked' })`. The new `setSession` throw (§3.3) thus stays a pure backstop and never surfaces as a submit error for a link that succeeded. Today the same race would revive a closed session with `mk: null`, the very half-session §3.3 forbids.
+
+### 3.7 Adjacent observations, not fixed here
 
 Found while reading; each is reported for the ledger rather than built, because each changes behaviour beyond "hand over the MK".
 
-- **The passkey session of a linked account says `mode: 'local'`.** `loginWithLocalBiometric` hard-codes `mode: 'local', online: false` and carries no access token, while `loginOnlineLinked` says `'linked'`. The token arrives on the first 401 through the refresh cookie (`lib/fetch.ts:72`, `sync/blob-transport.ts:143`), and connectivity becomes `linked_online` through the discovery probe (`discovery.store.ts:84`), so sync does not depend on `mode`. Two readers do: *Add passkey* (`app/account/biometric.tsx:174`) registers a local-only passkey instead of a server-synced one, and the post-onboarding biometric prompt stays hidden. Proposed ledger row: "Passkey unlock of a linked account yields `mode: 'local'`".
+- **The passkey session of a linked account says `mode: 'local'`.** `loginWithLocalBiometric` hard-codes `mode: 'local', online: false` and carries no access token, while `loginOnlineLinked` says `'linked'`. The token arrives on the first 401 through the refresh cookie (`lib/fetch.ts:72`, `sync/blob-transport.ts:143`), and connectivity becomes `linked_online` through the discovery probe (`discovery.store.ts:84`), so sync does not depend on `mode`. Two readers do: *Add passkey* (`app/account/biometric.tsx:174`) registers a local-only passkey instead of a server-synced one, and the post-onboarding biometric prompt stays hidden. Likewise it carries `userId: local-…` where the passphrase path has the server user id; `session.encrypt` and `session.decrypt` have no app callers, so the different AAD context does no harm today, and the one reader is the WebAuthn user handle (`lib/webauthn.ts:48`) (Larissa F7). Proposed ledger row: "Passkey unlock of a linked account yields `mode: 'local'` and a local `userId`".
+- **Existing copies of the raw MK** (`mcp/oauth/ensure-token.ts:120`, `login-online-linked.ts:136`) now run on the passkey path as well, exactly as on the passphrase path; they belong to the deferred custody row (Larissa F7).
 - **No crypto unit test covers `loginWithLocalBiometric` at all today** (`packages/crypto/tests/flows/biometric.test.ts` covers registration only). §5 adds them.
 
 ## 4. What does not change
@@ -111,14 +122,18 @@ Found while reading; each is reported for the ledger rather than built, because 
 
 ## 5. Tests (written first)
 
-1. **Crypto unit tests** (`packages/crypto/tests/flows/login-biometric.test.ts`, Bun, new): after `createLocalAccount` and `completeLocalBiometricRegistration`, a valid assertion returns `{ session, mk }` where `mk` equals the account's MK bytes; `session.close()` zeroes that same `mk` (shared buffer, not a copy); a wrong PRF output throws `integrity_check_failed` and returns nothing; an unknown credential throws `not_found`; the persisted sign counter advances. Assertions are signed by a software P-256 authenticator in the test.
+1. **Crypto unit tests** (`packages/crypto/tests/flows/login-biometric.test.ts`, Bun, new): after `createLocalAccount` and `completeLocalBiometricRegistration`, a valid assertion returns `{ session, mk }` where `mk` equals the account's MK bytes; `session.close()` zeroes that same `mk` (shared buffer, not a copy); a wrong PRF output throws `integrity_check_failed` and returns nothing; an unknown credential throws `not_found`; the persisted sign counter advances on success and stays unchanged after a wrong PRF output; a bad signature fails in `verifyLocalAssertion` and persists nothing (Larissa F8). Assertions are signed by a software P-256 authenticator in the test.
 2. **The regression test** (`apps/user-client/tests/routes/login-passkey-mk-regression.test.tsx`, renamed from the observation file, which this unit owns from now on): the three observations flip.
    - From a cold start, the Login page's passkey button unlocks; the store's `mk` is set and byte-equal to the account MK; a send gets past the master-key check and reaches the stream manager.
    - The PRF salt asked for is still `PRF_INPUT_SALT` (pins "nothing about the salt changes").
+   - **Same buffer, zeroed on sign-out:** keep a reference to `store.mk`, call `closeAndForget()`, assert the reference is all zeros and both slices are `null` (Larissa F8).
+   - **Wrong PRF output:** the store stays `{ session: null, mk: null }`, the error is the passkey-unlock copy, and no session is activated (Larissa F8).
    - **Sync gate opens:** on a linked fixture (`useAccountLinkStore` linked, connectivity `linked_online`), after the passkey unlock `isClass2Allowed()` is `true` and the sync trigger's lock→unlock subscription fires one cycle (spy on the cycle runner).
-   - **Late link:** after the passkey unlock, the invitation confirm screen takes the late-link branch (no username field).
+   - **Late link:** after the passkey unlock, the invitation confirm screen takes the late-link branch (no username field); a wrong passphrase shows the inline error and `joinStart` is never called; with the store emptied during `linkToServer`, the screen lands on `/login`, the linked row is set and no error is shown (Larissa F1, F2).
 3. **Store invariant** (`packages/ui-shared/tests/state/session.store.test.ts`): `setSession(session)` on an empty store throws and leaves `{ session: null, mk: null }`; the existing preserve-on-omit test for an unlocked store still passes.
-4. **`activateSession`** (`apps/user-client/tests/boot/activate-session.test.ts`): sets both slices; the existing `activateSession({} as never)` call gains an `mk`.
+4. **`activateSession`** (`apps/user-client/tests/boot/activate-session.test.ts`): sets both slices; when the identity guard throws, the session is closed, the store stays empty and the error is rethrown (Larissa F3); the existing `activateSession({} as never)` call gains an `mk`.
+
+The unit does not claim "no copy of the MK lingers anywhere": consumers copy the key by design (§3.7); the tests pin it for the login flow only.
 5. `pnpm test`, `pnpm typecheck`, `pnpm run build`, Biome. The auth-service and sync-service suites need a Postgres; the report says whether they could run (this unit does not touch them).
 
 ## 6. Prompt-cache consistency
@@ -128,10 +143,14 @@ This unit changes nothing that is sent to a provider: it only decides whether a 
 ## 7. Open questions for Chris
 
 - **Q1. Should an active session without a master key be impossible (`setSession` throws), or only discouraged (`activateSession`'s `mk` required, `setSession` unchanged)?** **Recommendation: impossible.** Because the compile-time check covers only callers of `activateSession`, while the 2026-05-20 insight (`mk` lost after a disconnect) shows how a half-session arises from a partial `setSession` elsewhere and fails silently. A throw turns such a future slip into a visible error in a test instead of a quiet "sync never starts". Cost: one guard and one test; no production caller needs to change.
-- **Q2. Fix "linked passkey session says `mode: 'local'`" (§3.6) now or later?** **Recommendation: later, as its own ledger row**, because it changes which kind of passkey *Add passkey* registers and which prompt shows, which is behaviour and copy, not key custody, and would grow this unit beyond the small fix.
+- **Q2. Fix "linked passkey session says `mode: 'local'`" (§3.7) now or later?** **Recommendation: later, as its own ledger row**, because it changes which kind of passkey *Add passkey* registers and which prompt shows, which is behaviour and copy, not key custody, and would grow this unit beyond the small fix.
 - **Q3. The papercut unit's `need=passphrase` mode** greys the passkey button with "This needs your passphrase". After this fix that copy is untrue: a passkey yields the MK too, and with Q1 the "master key unavailable" detour can only be reached when there is no session at all, where the protected route already redirects. **Recommendation: once both PRs are merged, a one-line follow-up enables the passkey button in that mode** (keeping the mode, its focus and *Not now* as a defensive way out), because a disabled control with a false reason misleads, which Laura rates a hard defect. This unit does not change it; the coordinator assigns it.
 
-## 8. Manual verification (Chris, on a real phone with a passkey)
+## 8. Larissa (design pass, 2026-11-18)
+
+**Verdict: CLEAR WITH CHANGES.** "The small fix creates no new kind of exposure": the passkey path puts the same single MK buffer into the same store slot as `loginLocalWithPassphrase`, with no new copy, persistence or log, and the §3.4 table matches the code. Worked in: F1 and F2 (medium, §3.6), F3 (low, §3.4), F5 (§1 wording), F7 (§3.7), F8 (§5). Deferred: F4 (low, §3.4; row proposed for `security-deferrals.md`). She supports Q1 "impossible" with the F2 handling. She audits the diff before the squash.
+
+## 9. Manual verification (Chris, on a real phone with a passkey)
 
 Preparation: a phone with a passkey registered on Chatsundere (Account → *Authentication methods* lists it under "Biometric on this device"), one local-only account and, separately, one linked account with an existing chat on a second device.
 
@@ -142,4 +161,4 @@ Preparation: a phone with a passkey registered on Chatsundere (Account → *Auth
 5. **Voice.** In a persona with a voice, play a reply aloud. *Pass:* you hear the persona's voice, not silence or a "no provider" fallback.
 6. **Sign out and back.** Account → *Sign out*, then sign in with the passkey again and send once more. *Pass:* sending works again.
 7. **Linked account syncing after a passkey-only cold start.** On the linked account: close the app completely, reopen, sign in **only** with the passkey (never type the passphrase in this session). On the second device, send a message in an existing chat. Back on the phone, wait up to a minute or switch away and back. *Pass:* the new message appears on the phone. Then send one from the phone: it appears on the second device. The sync status in Account → Server linking shows no error.
-8. **Link a local account after a passkey unlock** (optional, needs a spare invitation). On a local-only account with chats, unlock with the passkey, Account → Server linking → *Link to server*, scan the invitation. *Pass:* the form asks only for your passphrase (no new username), and after linking your chats are still there.
+8. **Link a local account after a passkey unlock** (optional, needs a spare invitation). On a local-only account with chats, unlock with the passkey, Account → Server linking → *Link to server*, scan the invitation. First type a deliberately wrong passphrase and continue: *Pass:* an error appears under the passphrase field and nothing is linked (Server linking still says "Local-only mode"). Then type the right one: *Pass:* the form asked only for your passphrase (no new username), and after linking your chats are still there.
