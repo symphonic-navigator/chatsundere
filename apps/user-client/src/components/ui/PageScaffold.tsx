@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { type ReactNode, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
-import { type Crumb, PageBar } from './PageBar.js';
+import { type Crumb, PageBar, type PageBarMove, runPageBarMove } from './PageBar.js';
 
 export interface PageScaffoldProps {
   crumbs: Crumb[];
@@ -15,7 +15,7 @@ export interface PageScaffoldProps {
   /** Intercepts the back control and ancestor crumbs, for a sub-state of a page that
    *  shares its route: navigating to that route must leave the sub-state, not no-op.
    *  Ignored while `dirty` guards the page. */
-  onNavigate?: (to: string) => void;
+  onNavigate?: (move: PageBarMove) => void;
   /** A fixed sub-header (tabs / search / filters / count) rendered inside the
    *  sticky chrome block, directly beneath the PageBar. When given, the chrome
    *  block (PageBar + this header) stays put and only `children` scrolls — the
@@ -42,9 +42,9 @@ export function PageScaffold({
   stickyHeader,
   children,
 }: PageScaffoldProps): JSX.Element {
-  const navigate = useNavigate();
-  const [pending, setPending] = useState<string | null>(null);
-  const onNavigate = dirty ? (to: string) => setPending(to) : intercept;
+  const nav = useAppNav();
+  const [pending, setPending] = useState<PageBarMove | null>(null);
+  const onNavigate = dirty ? (move: PageBarMove) => setPending(move) : intercept;
   const bar = <PageBar crumbs={crumbs} back={back} onHelp={onHelp} onNavigate={onNavigate} />;
 
   return (
@@ -67,9 +67,9 @@ export function PageScaffold({
         destructive
         onCancel={() => setPending(null)}
         onConfirm={() => {
-          const to = pending;
+          const move = pending;
           setPending(null);
-          if (to !== null) navigate(to);
+          if (move !== null) runPageBarMove(nav, move, back);
         }}
       />
     </div>

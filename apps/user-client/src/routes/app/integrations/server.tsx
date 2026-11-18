@@ -34,6 +34,7 @@ import {
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
 import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
@@ -137,6 +138,7 @@ type AddPhase =
 function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const location = useLocation();
   const hasProxy = useServerGate('proxy').enabled;
   const upsertDeferred = useUpsertMcpServer({ deferWhenOffline: true });
@@ -184,11 +186,12 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
       } catch {
         // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        navigate('/app/integrations');
+        nav.returnTo('/app/integrations');
         return;
       }
     }
-    navigate(`/app/integrations/${serverId}`);
+    // The sign-in page is done: the server's page takes its place in the history.
+    navigate(`/app/integrations/${serverId}`, { replace: true });
   }
 
   return (
@@ -253,6 +256,7 @@ function IntegrationServerForm({
 }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const proxyGate = useServerGate('proxy');
   const upsert = useUpsertMcpServer();
   const del = useDeleteMcpServer();
@@ -326,7 +330,7 @@ function IntegrationServerForm({
   const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
-  const back = () => navigate('/app/integrations');
+  const back = () => nav.returnTo('/app/integrations');
 
   function buildAuth(key: string | null): McpAuthResolved | null {
     if (!key) return null;
@@ -574,7 +578,11 @@ function IntegrationServerForm({
         back={detail}
         // The flow shares the detail page's route, so going "there" means leaving the flow;
         // an opened sign-in stays pending, as the flow's own Back keeps it.
-        onNavigate={(to) => (to === detail ? setReconnect({ kind: 'idle' }) : navigate(to))}
+        onNavigate={(move) =>
+          move.kind === 'back' || move.to === detail
+            ? setReconnect({ kind: 'idle' })
+            : nav.returnTo(move.to)
+        }
         onHelp={onHelp}
       >
         {helpOverlay}

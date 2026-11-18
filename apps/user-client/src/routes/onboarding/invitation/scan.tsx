@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { BackLink } from '../../../components/ui/BackLink.js';
 import { parseJoinUrl, scanWithCamera } from '../../../lib/qr.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { useNavTarget } from './_return-url.js';
@@ -63,13 +64,13 @@ export function InvitationScan() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link
+      <BackLink
         to={navTarget('/onboarding/invitation')}
         aria-label="Back"
         className="text-2xl text-paper-soft"
       >
         ←
-      </Link>
+      </BackLink>
 
       <h1 className="mt-4 font-display text-3xl italic">Scan QR code</h1>
 

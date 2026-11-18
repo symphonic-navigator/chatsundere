@@ -68,6 +68,7 @@ import { materialiseSeed } from '../../../lib/seed-materialise.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
@@ -89,6 +90,7 @@ export function ChatPage(): JSX.Element {
   const [search, setSearchParams] = useSearchParams();
   const personaIdFromQuery = search.get('personaId');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const location = useLocation();
   const qc = useQueryClient();
 
@@ -183,9 +185,11 @@ export function ChatPage(): JSX.Element {
   // so the user isn't stranded on a blank page.
   useEffect(() => {
     if (!isLazy && chatId && chatQuery.isFetched && !chatQuery.data?.chat) {
-      navigate('/app/history', { replace: true });
+      // A deleted chat behind the current page is skipped on the way back; with
+      // nothing behind, History is where the user can pick another.
+      nav.back('/app/history');
     }
-  }, [isLazy, chatId, chatQuery.isFetched, chatQuery.data?.chat, navigate]);
+  }, [isLazy, chatId, chatQuery.isFetched, chatQuery.data?.chat, nav]);
 
   // Clear the current-chat store when ChatPage unmounts. Without this, the
   // chatId persists across navigation to /app/history etc., and nsfwPanic
@@ -577,7 +581,7 @@ export function ChatPage(): JSX.Element {
 
   const onExitToEntranceHall = (): void => {
     setInteractionMode(false);
-    navigate('/app');
+    nav.returnTo('/app');
   };
 
   const onOpenPersonaEditor = (): void => {

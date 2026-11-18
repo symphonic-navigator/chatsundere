@@ -18,6 +18,7 @@ import { activateSession } from '../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../boot/client-data-identity.js';
 import { getDb } from '../../boot/open-db.js';
 import { PassphraseField } from '../../components/PassphraseField.js';
+import { BackLink } from '../../components/ui/BackLink.js';
 import { copy } from '../../lib/copy.js';
 import { HttpError } from '../../lib/fetch.js';
 import { rateLimitMessage } from '../../lib/recovery-copy.js';
@@ -181,9 +182,9 @@ export function OnboardingRecovery() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
+        <BackLink to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
           ←
-        </Link>
+        </BackLink>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
@@ -211,9 +212,9 @@ export function OnboardingRecovery() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
+      <BackLink to="/onboarding" className="text-2xl text-paper-soft" aria-label="Back">
         ←
-      </Link>
+      </BackLink>
       <h1 className="mt-4 font-display text-3xl italic">Recover your account</h1>
       <p className="mt-2 text-sm text-paper-soft">
         Enter your recovery key to re-establish access and set a new passphrase.

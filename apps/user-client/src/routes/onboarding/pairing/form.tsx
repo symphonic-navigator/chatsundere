@@ -3,6 +3,7 @@ import { probeServer } from '@chatsundere/ui-shared';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { JoinFormFields } from '../../../components/JoinFormFields.js';
+import { BackLink } from '../../../components/ui/BackLink.js';
 import { isValidCode } from '../../../lib/code-input.js';
 import { copy } from '../../../lib/copy.js';
 import { isValidServerUrl } from '../../../lib/server-url.js';
@@ -59,9 +60,9 @@ export function PairingForm() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding" aria-label="Back" className="text-2xl text-paper-soft">
+      <BackLink to="/onboarding" aria-label="Back" className="text-2xl text-paper-soft">
         ←
-      </Link>
+      </BackLink>
 
       <h1 className="mt-4 font-display text-3xl italic">Add this device</h1>
       <p className="mt-1 text-sm text-paper-soft">

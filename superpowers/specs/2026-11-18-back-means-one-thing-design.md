@@ -284,7 +284,11 @@ Nothing in this unit changes what is sent to any provider: it touches routing on
 - **Laura**: spec-pass done on 2026-11-18: one hard defect (Back from the recovery-key reveal into a half-done wizard with the key gone), fixed in this spec ("The recovery-key reveal is a point of no return"); nine soft notes, all worked in (`resetTo` by `idx`, the guard's curtain and reset, Home on a miss resets, the orphaned chat after a persona delete, the wording on loops, the dirty-guard route for the ledger, Q3's priority, the `back` prop's JSDoc, the manual steps). She agrees with Q1 as written, Q2 with the amendment, Q3 with the quick menu first. A pre-squash pass on the built flows follows.
 - **Larissa**: not required, no Larissa path is touched. `safeReturnPath` keeps guarding every `?return=` sink; the stamp holds only pathnames in `history.state`.
 
-## Open questions for Chris
+## Decisions (formerly the open questions)
+
+**Decided by Chris, 2026-11-18** ("ja … sind alle in meinem Sinn"): Q1, Q2 and Q3 as recommended below — `‹` goes where you came from and the crumbs go up; the adult-chat guard is built; Back with an open overlay is deferred and logged with the quick menu first. The 400 ms bound on `resetTo`, the two layers and the guard's no-delay rule stand as written.
+
+### The questions as they were put
 
 - **Q1 — Does `‹` go where you came from, or always up to the parent?** Laura's sweep suggested: pop when the entry behind is the page's parent, else replace with the parent. That keeps `‹` meaning "up", but then `‹` and the system Back differ after every cross-link (Hall's setup card → AI Providers: `‹` goes to Settings, Back goes to the Hall). **Recommendation: `‹` goes where you came from** (this spec), with the parent only when nothing is behind, and the crumbs for "up". Reason: one Back, one thing, on every page, and it is what iOS and Android apps do with their own back arrow.
 - **Q2 — Add the adult-chat guard?** **Recommendation: yes.** Reason: the panic's promise is "what was just hidden stays hidden", and today a Forward, a stale tab or a chat's Bookmarks page breaks it; the guard is a few lines on one route group.

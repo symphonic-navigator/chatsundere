@@ -21,6 +21,7 @@ import { activateSession } from '../../../boot/activate-session.js';
 import { wipeClientDataForFreshOnboarding } from '../../../boot/client-data-identity.js';
 import { getDb } from '../../../boot/open-db.js';
 import { PassphraseField } from '../../../components/PassphraseField.js';
+import { BackLink } from '../../../components/ui/BackLink.js';
 import { copy } from '../../../lib/copy.js';
 import { HttpError } from '../../../lib/fetch.js';
 import { httpServerClient } from '../../../lib/server-client.js';
@@ -311,13 +312,13 @@ function InvitationConfirmInner() {
   if (screen.kind === 'kind_mismatch') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <h1 className="mt-4 font-display text-2xl italic">This is a different kind of code</h1>
         <p className="mt-2 text-sm text-paper-soft">
           The code you entered is for adding another device, not for joining a server with an
@@ -344,13 +345,13 @@ function InvitationConfirmInner() {
   if (screen.kind === 'fatal') {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <p className="mt-6 rounded-[var(--radius-card)] bg-danger/10 px-4 py-3 text-sm text-danger ring-1 ring-inset ring-danger/30">
           {screen.message}
         </p>
@@ -370,13 +371,13 @@ function InvitationConfirmInner() {
   if (isLateLink && existingLink && !replaceAcknowledged) {
     return (
       <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-        <Link
+        <BackLink
           to={navTarget('/onboarding/invitation')}
           className="text-2xl text-paper-soft"
           aria-label="Back"
         >
           ←
-        </Link>
+        </BackLink>
         <h1 className="mt-4 font-display text-2xl italic">Replace this device's server?</h1>
         <p className="mt-2 text-sm text-paper-soft">
           This device is currently connected to{' '}
@@ -400,9 +401,9 @@ function InvitationConfirmInner() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-sm px-6 py-6">
-      <Link to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
+      <BackLink to="/onboarding/invitation" className="text-2xl text-paper-soft" aria-label="Back">
         ←
-      </Link>
+      </BackLink>
       <h1 className="mt-4 font-display text-3xl italic">
         {latelinkRename ? "That name's already taken here" : 'Join this server'}
       </h1>

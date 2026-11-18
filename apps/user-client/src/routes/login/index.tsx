@@ -21,6 +21,7 @@ import { isAuthDegraded, setAuthDegraded } from '../../lib/auth-degrade.js';
 import { copy } from '../../lib/copy.js';
 import { safeReturnPath } from '../../lib/safe-return.js';
 import { httpServerClient } from '../../lib/server-client.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { isWebAuthnAvailable } from '../../lib/webauthn-availability.js';
 import { postUnlockTarget } from '../../mcp/oauth/sign-in-session.js';
 import { useAppUpdateStore } from '../../sw/app-update.store.js';
@@ -48,6 +49,7 @@ export function safeReturnTarget(raw: string | null): string {
 
 export function Login() {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const [searchParams] = useSearchParams();
   // Read once per mount: the key is single-use and must not be re-consumed on re-render.
   const [postUpdateReturn] = useState(consumeReturnPath);
@@ -193,7 +195,7 @@ export function Login() {
       }
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
-      navigate(await postUnlockTarget(returnTarget), { replace: true });
+      nav.returnTo(await postUnlockTarget(returnTarget));
     } catch (e) {
       // Spec §5.6: no distinction between wrong passphrase and missing account
       // to prevent information leakage.
@@ -273,7 +275,7 @@ export function Login() {
       await activateSession(session);
       // §5.2 — a fresh unlock proves the auth path works, so clear the degrade latch.
       if (isAuthDegraded()) void setAuthDegraded(false);
-      navigate(await postUnlockTarget(returnTarget), { replace: true });
+      nav.returnTo(await postUnlockTarget(returnTarget));
     } catch (_e) {
       // All biometric errors map to the same user-facing message regardless of
       // the underlying cause — no detail that could aid an attacker.
@@ -359,7 +361,7 @@ export function Login() {
             {needPassphrase && sessionActive ? (
               <button
                 type="button"
-                onClick={() => navigate(returnTarget, { replace: true })}
+                onClick={() => nav.returnTo(returnTarget)}
                 className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
               >
                 {copy.login.notNow}
