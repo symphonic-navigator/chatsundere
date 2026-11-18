@@ -1,6 +1,6 @@
 # Add an MCP connector from the chat — design
 
-**Date:** 2026-11-18 · **Target:** 0.5.0 on `master` · **Branch:** `feat/050-add-mcp-connector` (based on `feat/050-papercuts`, PR #58) · **Size:** one unit, one squash · **Audits:** Laura spec-pass and Larissa-style security read done (§13)
+**Date:** 2026-11-18 · **Target:** 0.5.0 on `master` · **Branch:** `feat/050-add-mcp-connector` (based on `feat/050-papercuts`, PR #58) · **Size:** one unit, one squash · **Audits:** Laura spec-pass and Larissa-style security read done (§13) · **Approved:** Chris, 2026-11-18
 
 ## Why
 
@@ -263,7 +263,7 @@ The draft of this spec claimed redirects are never followed silently. That was w
 
 **Fix: every MCP request uses `redirect: 'manual'`, and a redirect becomes a typed error with its own words.** (Rule 8 alone would stop a model-invented redirect link; this protects the user's own links and every typed link too. It closes the open L2 item of `security-deferrals.md`, 2026-11-02, "`redirect: 'error'` for direct requests".)
 
-- **Mechanism.** `buildRequest` sets `redirect: 'manual'` on both routes, credential or not. A redirect then arrives as `response.type === 'opaqueredirect'` (status 0), which is distinguishable from a network failure without following the redirect and without learning its target; `redirect: 'error'` would instead throw the same `TypeError` as an unreachable host. Opaque redirects for `manual` are in the Fetch standard and supported by the browsers we support (Chromium, Firefox, Safari/WebKit including iOS home-screen apps); the app's service worker does not intercept cross-origin MCP requests, which the builder confirms in the generated worker. `send` throws a new `McpRedirectError` for an opaque redirect on either route; it replaces the generic `ProxyRedirectError` for MCP, whose copy ("This provider … custom base URL") was written for LLM providers.
+- **Mechanism.** `buildRequest` sets `redirect: 'manual'` on both routes, credential or not. A redirect then arrives as `response.type === 'opaqueredirect'` (status 0), which is distinguishable from a network failure without following the redirect and without learning its target; `redirect: 'error'` would instead throw the same `TypeError` as an unreachable host. Opaque redirects for `manual` are in the Fetch standard and supported by the browsers we support (Chromium, Firefox, Safari/WebKit including iOS home-screen apps); the app's service worker does not intercept MCP requests: its Workbox `runtimeCaching` routes match `GET` only (the default), and MCP requests are `POST` (checked 2026-11-18 in `vite.config.ts`). `send` throws a new `McpRedirectError` for an opaque redirect on either route; it replaces the generic `ProxyRedirectError` for MCP, whose copy ("This provider … custom base URL") was written for LLM providers.
 - **Who is affected.** Only servers that answer through a redirect on a route that followed it before: open servers (no key, no sign-in) reached directly, i.e. with *Local network* on or on a device without a proxy. Proxied requests already refused redirects; direct requests with a key or a token already used `redirect: 'error'` (they now fail legibly instead of as "Couldn't reach"). OAuth servers are not affected (their MCP requests carry a token; their OAuth requests use `oauth-fetch.ts`, unchanged).
 - **Words, wherever an MCP request can fail** (one constant, `MCP_REDIRECT`, plus the per-surface action; never a raw transport error):
 
@@ -330,7 +330,10 @@ Unit (Vitest), each written and seen failing before its code:
 - `registry.test.ts`: the tool is second in the active tool list; `BUILTIN_TOOL_NAMES` contains it; the definition and prompt line equal the constants.
 - A cache test: two consecutive sends of one chat produce byte-identical tool definitions and system prompt, with a dismissal of the card in between.
 
-## 10. Open questions for Chris
+## 10. Decisions
+
+**Decided by Chris, 2026-11-18:** every question below as recommended ("sind alle in meinem Sinn"); the redirect handling of §6.3 stands, with its fallback.
+
 
 **Q1. Start the check at once after the tap, or wait for *Check server*?** *Recommendation: at once.* The tap on a card that shows the full link, labelled *Check & add*, is the decision to contact that address; the check carries no credential; Back returns to the chat. A second tap would repeat the link without adding safety, and the Grok bar is "everything after was guided". Laura and Larissa agree, Larissa on the condition that only links the user wrote are proposed (now rule 8).
 
