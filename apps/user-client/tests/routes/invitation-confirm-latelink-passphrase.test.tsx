@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mutable handles the crypto mock reads on each call.
 let mockLinkedAccount: unknown = null;
 let linkToServerImpl: () => Promise<void> = async () => {};
+let linkArgs: { mk: Uint8Array } | null = null;
 let loginLocalImpl: () => Promise<unknown> = async () => ({});
 
 vi.mock('@chatsundere/crypto', async (importOriginal) => {
@@ -20,7 +21,10 @@ vi.mock('@chatsundere/crypto', async (importOriginal) => {
     getLocalAccount: vi.fn(async () => ({ username: 'chris' })),
     getLinkedAccount: vi.fn(async () => mockLinkedAccount),
     loginLocalWithPassphrase: vi.fn(() => loginLocalImpl()),
-    linkToServer: vi.fn(() => linkToServerImpl()),
+    linkToServer: vi.fn((args: { mk: Uint8Array }) => {
+      linkArgs = args;
+      return linkToServerImpl();
+    }),
     changeUsername: vi.fn(async () => {}),
     setBiometricPromptDue: vi.fn(async () => {}),
     startJoinByInvitation: vi.fn(),
@@ -85,6 +89,7 @@ describe('InvitationConfirm — late link proves the passphrase and lands on the
 
   beforeEach(() => {
     vi.clearAllMocks();
+    linkArgs = null;
     mockLinkedAccount = null;
     linkToServerImpl = async () => {
       mockLinkedAccount = LINKED_ROW;
@@ -114,21 +119,27 @@ describe('InvitationConfirm — late link proves the passphrase and lands on the
     });
   });
 
-  it('shows the inline passphrase error and sends nothing on a wrong passphrase', async () => {
-    loginLocalImpl = async () => {
-      throw new CryptoError('wrong_passphrase', 'wrong');
-    };
-    renderConfirm();
+  // A typo fails the integrity HMAC first (the AMK comes from the passphrase), so
+  // the real flow throws `integrity_check_failed`; `wrong_passphrase` is the AEAD
+  // fallback. Both must land inline (Larissa M1).
+  it.each(['integrity_check_failed', 'wrong_passphrase'] as const)(
+    'shows the inline passphrase error and sends nothing when the proof throws %s',
+    async (code) => {
+      loginLocalImpl = async () => {
+        throw new CryptoError(code, 'wrong');
+      };
+      renderConfirm();
 
-    await submitPassphrase('typo horse');
+      await submitPassphrase('typo horse');
 
-    expect(await screen.findByText(copy.login.errors.wrongPassphrase)).toBeInTheDocument();
-    expect(loginLocalWithPassphrase).toHaveBeenCalledTimes(1);
-    expect(linkToServer).not.toHaveBeenCalled();
-    // Back on the form, not stuck in 'submitting'.
-    expect(screen.getByRole('button', { name: 'Connect this device' })).toBeEnabled();
-    expect(useSessionStore.getState().mk).toBe(storeMk);
-  });
+      expect(await screen.findByText(copy.login.errors.wrongPassphrase)).toBeInTheDocument();
+      expect(loginLocalWithPassphrase).toHaveBeenCalledTimes(1);
+      expect(linkToServer).not.toHaveBeenCalled();
+      // Back on the form, not stuck in 'submitting'.
+      expect(screen.getByRole('button', { name: 'Connect this device' })).toBeEnabled();
+      expect(useSessionStore.getState().mk).toBe(storeMk);
+    },
+  );
 
   it('closes the proof session, links once and leaves the store MK untouched', async () => {
     const proof = proofResult();
@@ -181,7 +192,13 @@ describe('InvitationConfirm — late link proves the passphrase and lands on the
     await submitPassphrase('correct horse');
     await waitFor(() => expect(linkToServer).toHaveBeenCalledTimes(1));
 
+    const wrapped = linkArgs?.mk;
     useSessionStore.getState().closeAndForget();
+    // The MK handed to linkToServer is the proof's own buffer, so a sign-out
+    // mid-link cannot zero what is about to be wrapped for the server (H1).
+    expect(wrapped).toBeDefined();
+    expect(wrapped).not.toBe(storeMk);
+    expect(wrapped?.every((b) => b === 0)).toBe(false);
     resolveLink();
 
     expect(await screen.findByText('login page')).toBeInTheDocument();

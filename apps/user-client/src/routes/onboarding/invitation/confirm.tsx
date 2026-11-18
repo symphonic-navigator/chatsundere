@@ -209,33 +209,50 @@ function InvitationConfirmInner() {
         // Prove the passphrase against the local wrap before anything is sent:
         // after a passkey unlock it may not have been typed for weeks, and
         // `linkToServer` would register a typo as the server passphrase, splitting
-        // the account (spec §3.6, F1). The proof session owns its own unwrapped
-        // buffer and never reaches the store, so closing it leaves the store's MK
-        // intact (§3.4.1). A wrong passphrase throws `wrong_passphrase`.
-        const proof = await loginLocalWithPassphrase({ db: getDb(), passphrase });
-        proof.session.close();
-        // The proof is slow (KDF), so re-read the MK rather than trust the one
-        // captured at render: a sign-out meanwhile zeroes that buffer in place,
-        // and `linkToServer` would wrap all zeros for the server. Nothing has been
-        // sent yet, so the user simply unlocks again.
-        const liveMk = useSessionStore.getState().mk;
-        if (!liveMk) {
-          navigate('/login', { replace: true });
-          return;
+        // the account (spec §3.6, F1). A typo fails the integrity HMAC first
+        // (`integrity_check_failed`), the AEAD otherwise (`wrong_passphrase`);
+        // both are shown inline, as on the Login page they cannot be told apart.
+        let proof: Awaited<ReturnType<typeof loginLocalWithPassphrase>>;
+        try {
+          proof = await loginLocalWithPassphrase({ db: getDb(), passphrase });
+        } catch (err) {
+          if (
+            err instanceof CryptoError &&
+            (err.code === 'integrity_check_failed' || err.code === 'wrong_passphrase')
+          ) {
+            setPassphraseError(copy.login.errors.wrongPassphrase);
+            setScreen({ kind: 'ready' });
+            return;
+          }
+          throw err;
         }
-        if (renamed) {
-          await changeUsername({ db: getDb(), newUsername: cleanUsername });
+        try {
+          // The proof is slow (KDF): if the user signed out meanwhile, nothing
+          // has been sent yet, so they simply unlock again.
+          if (!useSessionStore.getState().mk) {
+            navigate('/login', { replace: true });
+            return;
+          }
+          if (renamed) {
+            await changeUsername({ db: getDb(), newUsername: cleanUsername });
+          }
+          // `linkToServer` wraps the proof's own MK, never the store's: the store
+          // shares its buffer with the live session, and a sign-out during this
+          // network round would zero it in place, wrapping all zeros for the
+          // server (Larissa H1). The proof session never reaches the store, so
+          // closing it below leaves the store's MK intact (spec §3.4.1).
+          await linkToServer({
+            db: getDb(),
+            serverClient: httpServerClient,
+            invitationToken: storeCtx.code,
+            baseUrl: storeCtx.baseUrl,
+            issuerLabel: null,
+            passphrase,
+            mk: proof.mk,
+          });
+        } finally {
+          proof.session.close();
         }
-        // `linkToServer` runs its own OPAQUE round internally.
-        await linkToServer({
-          db: getDb(),
-          serverClient: httpServerClient,
-          invitationToken: storeCtx.code,
-          baseUrl: storeCtx.baseUrl,
-          issuerLabel: null,
-          passphrase,
-          mk: liveMk,
-        });
         useConnectivityStore.getState().onServerOk();
         // Re-read the session: it may have gone during the await (sign-out, a
         // refused refresh, a wipe). The device is linked already, so record the
@@ -563,10 +580,6 @@ export function mapSubmitError(err: unknown): SubmitMapped {
         kind: 'username_inline',
         message: 'Use 3–32 characters: lowercase letters, numbers, - or _.',
       };
-    }
-    if (err.code === 'wrong_passphrase') {
-      // Raised by the late-link passphrase proof (spec §3.6, F1).
-      return { kind: 'passphrase_inline', message: copy.login.errors.wrongPassphrase };
     }
     if (err.code === 'opaque_protocol_error') {
       return {
