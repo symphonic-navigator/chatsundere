@@ -40,17 +40,23 @@ export function SignInSettings(props: {
   onNext: (draft: ServerDraft) => void;
   onUseKey: () => void;
   onOpenExisting: (id: string) => void;
+  /** The draft chosen before backing out of the sign-in, restored as the starting values. */
+  initial?: ServerDraft | undefined;
 }): JSX.Element {
-  const { check, rows } = props;
+  const { check, rows, initial } = props;
   const host = hostOf(check.endpoint);
   const taken = rows.map((r) => r.prefix);
-  const [name, setName] = useState(check.discovery.resourceName ?? host);
-  const [prefix, setPrefix] = useState<string | null>(null);
-  const [onByDefault, setOnByDefault] = useState(true);
-  const [autoRun, setAutoRun] = useState(false);
+  const autoPrefix = (n: string) => uniquePrefix(sanitiseToolName(n), taken);
+  const [name, setName] = useState(initial?.name ?? check.discovery.resourceName ?? host);
+  // A prefix that was derived from the name keeps following it once restored.
+  const [prefix, setPrefix] = useState<string | null>(
+    initial && initial.prefix !== autoPrefix(initial.name) ? initial.prefix : null,
+  );
+  const [onByDefault, setOnByDefault] = useState(initial?.onByDefault ?? true);
+  const [autoRun, setAutoRun] = useState(initial?.autoRun ?? false);
   // A direct answer is the only proof this device can reach the server without a proxy.
-  const [allowDirect, setAllowDirect] = useState(check.route === 'direct');
-  const effectivePrefix = prefix ?? uniquePrefix(sanitiseToolName(name), taken);
+  const [allowDirect, setAllowDirect] = useState(initial?.allowDirect ?? check.route === 'direct');
+  const effectivePrefix = prefix ?? autoPrefix(name);
 
   const existing = existingConnection(rows, check.discovery.resource);
   if (existing) {

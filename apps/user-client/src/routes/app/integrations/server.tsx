@@ -54,6 +54,9 @@ import { useClass2Gate } from '../../../sync/gate.js';
 type AuthScheme = 'none' | 'bearer' | 'header';
 type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
 
+/** `statusOf`'s line for an OAuth row that needs a server this account has not linked. */
+const NEEDS_LINKED_SERVER = '○ Needs a linked Chatsundere server';
+
 const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as const;
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
@@ -118,7 +121,12 @@ type FormSeed = {
 
 type AddPhase =
   | { kind: 'check' }
-  | { kind: 'sign-in'; check: Extract<CheckResult, { kind: 'sign-in' }> }
+  | {
+      kind: 'sign-in';
+      check: Extract<CheckResult, { kind: 'sign-in' }>;
+      /** The last draft, kept when the user backs out of the sign-in (050 papercuts, S11). */
+      draft?: ServerDraft;
+    }
   | { kind: 'flow'; discovery: OAuthDiscovery; draft: ServerDraft; back: AddPhase }
   | { kind: 'form'; seed: FormSeed };
 
@@ -203,8 +211,14 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
           <SignInSettings
             check={phase.check}
             rows={rows}
+            initial={phase.draft}
             onNext={(draft) =>
-              setPhase({ kind: 'flow', discovery: phase.check.discovery, draft, back: phase })
+              setPhase({
+                kind: 'flow',
+                discovery: phase.check.discovery,
+                draft,
+                back: { kind: 'sign-in', check: phase.check, draft },
+              })
             }
             onUseKey={() =>
               setPhase({ kind: 'form', seed: { url: phase.check.endpoint, authScheme: 'bearer' } })
@@ -299,6 +313,17 @@ function IntegrationServerForm({
   const pendingHere = existing
     ? (pending.data ?? []).find((p) => p.serverId === existing.id)
     : undefined;
+  const oauthStatus =
+    isOAuth && existing
+      ? statusOf(existing, {
+          hasProxy: proxyGate.enabled,
+          linked,
+          grant,
+          signingIn: pendingHere !== undefined,
+        })
+      : null;
+  // Only the local-only reason has a fix here; a linked server that is offline does not.
+  const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
   const back = () => navigate('/app/integrations');
@@ -578,12 +603,7 @@ function IntegrationServerForm({
       <div className="flex flex-col gap-3 px-4 pb-8 pt-2">
         {isOAuth && existing ? (
           <OAuthConnectionPanel
-            status={statusOf(existing, {
-              hasProxy: proxyGate.enabled,
-              linked,
-              grant,
-              signingIn: pendingHere !== undefined,
-            })}
+            status={oauthStatus ?? ''}
             grant={grant}
             signingIn={pendingHere !== undefined}
             backendUnreachable={class2.disabled}
@@ -592,6 +612,19 @@ function IntegrationServerForm({
             onSignInAgain={() => void onSignInAgain()}
             onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
           />
+        ) : null}
+        {existing && offerLinking ? (
+          <Button
+            tone="primary"
+            className="self-start"
+            onClick={() =>
+              navigate(
+                `/app/account/server-linking?return=${encodeURIComponent(`/app/integrations/${existing.id}`)}`,
+              )
+            }
+          >
+            Link a server
+          </Button>
         ) : null}
 
         <div>
