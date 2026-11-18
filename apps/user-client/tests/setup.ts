@@ -2,7 +2,8 @@
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { resetNavTrailForTests } from '../src/state/nav-trail.store.js';
 
 // Node 26 exposes an experimental `localStorage` getter that returns undefined
 // without --localstorage-file and shadows jsdom's implementation. Do not read
@@ -67,3 +68,8 @@ if (typeof URL.createObjectURL === 'undefined') {
 }
 
 afterEach(() => cleanup());
+
+// The navigation trail and its double-tap guard live in module state; in the app a
+// reload clears them and the tracker updates them, but tests render many routers
+// in one module (often without the tracker), so each test starts clean.
+beforeEach(() => resetNavTrailForTests());
