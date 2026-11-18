@@ -98,7 +98,7 @@ function plantStream(chatId: string, personaId: string): void {
 describe('nsfwPanic', () => {
   it('no-op when no adult personas exist', async () => {
     const navigate = vi.fn();
-    await nsfwPanic({ navigate });
+    await nsfwPanic({ resetTo: navigate, trail: () => [] });
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -106,7 +106,7 @@ describe('nsfwPanic', () => {
     const { personaId, chatId } = await seedAdultPersona();
     plantStream(chatId, personaId);
     const navigate = vi.fn();
-    await nsfwPanic({ navigate });
+    await nsfwPanic({ resetTo: navigate, trail: () => [] });
     expect(useStreamManagerStore.getState().streams.size).toBe(0);
   });
 
@@ -116,7 +116,7 @@ describe('nsfwPanic', () => {
     // active chat is something else
     useCurrentChatStore.getState().setChatId('some-other-chat');
     const navigate = vi.fn();
-    await nsfwPanic({ navigate });
+    await nsfwPanic({ resetTo: navigate, trail: () => [] });
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -126,12 +126,30 @@ describe('nsfwPanic', () => {
     useCurrentChatStore.getState().setChatId(chatId);
     const showSpy = vi.spyOn(toastStore, 'show');
     const navigate = vi.fn();
-    await nsfwPanic({ navigate });
+    await nsfwPanic({ resetTo: navigate, trail: () => [] });
     expect(navigate).toHaveBeenCalledWith('/app');
     await Promise.resolve();
     expect(showSpy).toHaveBeenCalledWith(
       expect.objectContaining({ tone: 'warn', message: expect.stringContaining('Adult mode') }),
     );
+  });
+
+  it('clears the way back when an adult chat is behind, though none is open', async () => {
+    const { chatId } = await seedAdultPersona();
+    useCurrentChatStore.getState().setChatId(null);
+    const resetTo = vi.fn();
+    await nsfwPanic({
+      resetTo,
+      trail: () => ['/app', `/app/chat/${chatId}`, '/app/persona/x'],
+    });
+    expect(resetTo).toHaveBeenCalledWith('/app');
+  });
+
+  it('leaves the way back alone when only ordinary chats are behind', async () => {
+    await seedAdultPersona();
+    const resetTo = vi.fn();
+    await nsfwPanic({ resetTo, trail: () => ['/app', '/app/chat/not-adult'] });
+    expect(resetTo).not.toHaveBeenCalled();
   });
 
   it('preserves the draft persona-message of an aborted adult-persona stream', async () => {
@@ -173,7 +191,7 @@ describe('nsfwPanic', () => {
       ]),
     });
 
-    await nsfwPanic({ navigate: () => {} });
+    await nsfwPanic({ resetTo: () => {}, trail: () => [] });
 
     const row = await db.messages.get(draftMsgId);
     expect(row).toBeDefined();
@@ -196,7 +214,7 @@ describe('nsfwPanic', () => {
       streamingState: 'complete',
     });
     plantStream(chatId, personaId);
-    await nsfwPanic({ navigate: vi.fn() });
+    await nsfwPanic({ resetTo: vi.fn(), trail: () => [] });
     const msgs = await db.messages.where('chatId').equals(chatId).toArray();
     expect(msgs.length).toBe(1);
     expect(msgs[0]?.role).toBe('user');

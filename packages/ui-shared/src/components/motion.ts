@@ -22,11 +22,15 @@ export function pickWithin(rng: () => number, min: number, max: number): number 
 }
 
 /**
- * Returns true when the user has requested reduced motion via the OS
- * accessibility preference. Defaults to true in non-browser environments so
- * server-rendered output is always motion-free.
+ * Returns true when the user has requested reduced motion, either via the OS
+ * accessibility preference or via an in-app switch that marks the root
+ * element `data-motion="reduced"`. Defaults to true in non-browser
+ * environments so server-rendered output is always motion-free.
  */
 export function respectsReducedMotion(): boolean {
   if (typeof window === 'undefined') return true;
+  if (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced') {
+    return true;
+  }
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

@@ -13,6 +13,7 @@ import {
 } from '../../../data/mcp-servers.js';
 import { readReturnTo, withReturn } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
 import { type ServerDraft, finishOrphanedSignIns } from '../../../mcp/oauth/sign-in.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -28,6 +29,7 @@ export function PendingSignInPage(): JSX.Element {
   const [search] = useSearchParams();
   // The connector card's *Continue sign-in* comes here with the chat it was tapped in.
   const returnTo = readReturnTo(search);
+  const nav = useAppNav();
   const { onHelp, helpOverlay } = useHelp('integrations');
   const servers = useMcpServers();
   const grants = useMcpOAuthGrants();
@@ -49,13 +51,18 @@ export function PendingSignInPage(): JSX.Element {
         // The grant exists; finishOrphanedSignIns saves the row from the draft. My
         // Integrations runs it on load, but the chat does not, so a return retries here.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        if (returnTo) void finishOrphanedSignIns().catch(() => undefined);
-        navigate(returnTo ?? INTEGRATIONS_LIST);
+        if (returnTo) {
+          void finishOrphanedSignIns().catch(() => undefined);
+          nav.returnTo(returnTo);
+        } else {
+          nav.returnTo(INTEGRATIONS_LIST);
+        }
         return;
       }
     }
     if (!returnTo) {
-      navigate(`/app/integrations/${serverId}`);
+      // The waiting screen is done: the server's page takes its place in the history.
+      navigate(`/app/integrations/${serverId}`, { replace: true });
       return;
     }
     const row = servers.data?.find((r) => r.id === serverId);
@@ -73,7 +80,7 @@ export function PendingSignInPage(): JSX.Element {
         durationMs: 6_000,
       });
     }
-    navigate(returnTo);
+    nav.returnTo(returnTo);
   }
 
   return (
@@ -96,7 +103,7 @@ export function PendingSignInPage(): JSX.Element {
               link ? { state: { useKeyFor: link } } : undefined,
             )
           }
-          onClose={() => navigate(returnTo ?? INTEGRATIONS_LIST)}
+          onClose={() => nav.returnTo(returnTo ?? INTEGRATIONS_LIST)}
         />
       </div>
     </PageScaffold>

@@ -33,6 +33,7 @@ vi.mock('../../src/sw/presence.js', () => ({
 
 import { CryptoError } from '@chatsundere/crypto';
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
+import { copy } from '../../src/lib/copy.js';
 import { Login } from '../../src/routes/login/index.js';
 import { _resetAppUpdateForTests, useAppUpdateStore } from '../../src/sw/app-update.store.js';
 import {
@@ -147,4 +148,19 @@ describe('Login × app update (spec 2026-09-26 §2.4, §3.3)', () => {
     fireEvent.submit(button.closest('form') as HTMLFormElement);
     expect(mockLoginLocalWithPassphrase).not.toHaveBeenCalled();
   });
+});
+
+describe('Login — a mistyped local passphrase', () => {
+  for (const code of ['wrong_passphrase', 'integrity_check_failed'] as const) {
+    it(`says "wrong passphrase" for ${code}`, async () => {
+      // A typo fails the integrity HMAC first (integrity_check_failed), the AEAD
+      // otherwise (wrong_passphrase); the user cannot tell them apart, nor should.
+      mockLoginLocalWithPassphrase.mockImplementation(
+        () => new Promise((_, reject) => setTimeout(() => reject(new CryptoError(code, 'no')), 0)),
+      );
+      renderLogin();
+      await unlock('typo');
+      expect(await screen.findByRole('alert')).toHaveTextContent(copy.login.errors.wrongPassphrase);
+    });
+  }
 });

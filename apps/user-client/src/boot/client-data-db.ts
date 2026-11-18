@@ -313,6 +313,10 @@ export interface PersonaRow {
   /** Last time the user actually sent a message to this persona (any chat).
    *  Drives Circle ordering. The auto-opener does NOT update it. */
   lastInteractionAt?: number;
+  /** Stamps user turns with their local send time and tells the model so.
+   *  Absent ⇒ `!roleplay` (resolve with `resolveTimeAwareness`), so the
+   *  default follows the roleplay switch until the user sets it. */
+  timeAwareness?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -406,6 +410,12 @@ export interface MessageRow {
    *  greeting (wire-excluded, echoed to the system prompt); 'body' = an
    *  alternating user/persona turn that goes on the wire. */
   seedRole?: 'greeting' | 'body';
+  /** The sender's UTC offset in minutes at `createdAt` (positive east of
+   *  Greenwich), written once when a user message is created and never
+   *  changed. Renders the turn's `<sent>` stamp, so it must survive every
+   *  copy and sync for the stamp to stay byte-stable. Absent on rows from
+   *  before 0.5.0 and on persona rows. Non-indexed; no Dexie bump. */
+  utcOffsetMinutes?: number;
   streamingState: 'complete' | 'incomplete';
   /** Set when an `incomplete` message failed because a provider needed the
    *  account proxy relay and the device has no link (spec §6, Task E2).

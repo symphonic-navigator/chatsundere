@@ -111,6 +111,24 @@ describe('importChatsuneSessions', () => {
     expect(msgs[1]?.contentBlocks).toContainEqual({ type: 'reasoning', text: 'think' });
   });
 
+  it('stamps imported user rows with the device offset for their own instant', async () => {
+    vi.stubEnv('TZ', 'Asia/Kathmandu');
+    try {
+      await importChatsuneSessions('p1', SESSIONS);
+      const db = getClientDataDb();
+      const chat = await db.chats.where('personaId').equals('p1').first();
+      const msgs = await db.messages
+        .where('chatId')
+        .equals(chat?.id ?? '')
+        .sortBy('createdAt');
+      expect(msgs[0]?.role).toBe('user');
+      expect(msgs[0]?.utcOffsetMinutes).toBe(345);
+      expect(msgs[1]?.utcOffsetMinutes).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('is idempotent: a second import of the same sessions skips them', async () => {
     await importChatsuneSessions('p1', SESSIONS);
     const res = await importChatsuneSessions('p1', SESSIONS);

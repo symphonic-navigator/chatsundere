@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../../../components/ui/Button.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { move, renameProject, writeText } from '../../../projects/fs.js';
 import { useProject, useProjectTree } from '../../../projects/hooks.js';
 import { dirname, normalisePath, withMarkdownExtension } from '../../../projects/path.js';
@@ -59,6 +60,7 @@ function moveLabel(node: TreeNode, input: string): string {
 export function ProjectTreePage(): JSX.Element {
   const { projectId = '' } = useParams();
   const navigate = useNavigate();
+  const nav = useAppNav();
   const project = useProject(projectId);
   const files = useProjectTree(projectId);
   const tree = useMemo(() => buildTree(files ?? []), [files]);
@@ -197,7 +199,7 @@ export function ProjectTreePage(): JSX.Element {
                   label: 'Delete',
                   tone: 'destructive',
                   onSelect: () => {
-                    navigate('/app/projects');
+                    nav.returnTo('/app/projects');
                     void deleteProjectWithUndo(project.id);
                   },
                 },

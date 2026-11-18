@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import type { SeedTemplateRow } from '../../../boot/client-data-db.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
@@ -16,6 +16,7 @@ import {
 } from '../../../data/seed-templates.js';
 import { useAdultMode } from '../../../data/settings.js';
 import { endsOnPersona, isApplyable, normaliseBody, roleAt } from '../../../lib/seed-template.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useClass2Gate } from '../../../sync/gate.js';
 
 const TEMPLATES_PATH = '/app/treasury/templates';
@@ -60,7 +61,7 @@ interface BodyDraft {
 }
 
 function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): JSX.Element {
-  const navigate = useNavigate();
+  const nav = useAppNav();
   const create = useCreateSeedTemplate();
   const update = useUpdateSeedTemplate();
   const del = useDeleteSeedTemplate();
@@ -140,7 +141,7 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
         await update.mutateAsync({ id: existing.id, patch: payload });
       }
       setDirty(false);
-      navigate(TEMPLATES_PATH);
+      nav.back(TEMPLATES_PATH);
     } catch {
       setSaveError('Could not save — your changes are kept. Try again.');
     } finally {
@@ -376,7 +377,7 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             del.mutate(existing.id);
-            navigate(TEMPLATES_PATH);
+            nav.returnTo(TEMPLATES_PATH);
           }}
         />
       ) : null}

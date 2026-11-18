@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
+import { toolDisplayName } from '../../lib/tool-display-name.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
 import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
 import { McpRedirectNotice, readMcpRedirectNotice } from '../mcp/McpRedirectNotice.js';
@@ -43,8 +44,7 @@ interface PillPayloadShape {
 
 function labelFor(row: PillRow): string {
   const p = row.payload as PillPayloadShape | undefined;
-  if (row.kind === 'tool-call' && p?.name === 'write_memory_entry') return 'Remembered';
-  if (row.kind === 'tool-call') return p?.name ?? 'tool';
+  if (row.kind === 'tool-call') return p?.name ? toolDisplayName(p.name) : 'tool';
   if (row.kind === 'kb-injection') return `Lore · ${p?.entries?.length ?? 0}`;
   if (row.kind === 'image-result') return 'image';
   return p?.expression ?? 'voice';

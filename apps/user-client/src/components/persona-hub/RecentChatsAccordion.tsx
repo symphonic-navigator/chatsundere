@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ChatRow } from '../../boot/client-data-db.js';
 import { displayTitle } from '../../lib/chat-title.js';
+import { currentHistoryGen } from '../../lib/history-return.js';
 import { relativeTimeLabel } from '../../lib/relative-time.js';
 
 /** Device-local, persona-global open/closed state of the accordion. */
@@ -38,7 +39,8 @@ interface Props {
 /**
  * "Recent chats" on the persona hub (spec §2): the ten newest chats of this
  * persona, filterable by title across all of them, with one link into the full
- * History page — `History →` while collapsed, `All in History →` at the list end.
+ * History page — `History →` while collapsed, `All in History →` at the list end
+ * (`Search messages in History →` when no title matches the filter).
  */
 export function RecentChatsAccordion({ personaId, chats, returnTo }: Props): JSX.Element {
   const listId = useId();
@@ -62,10 +64,12 @@ export function RecentChatsAccordion({ personaId, chats, returnTo }: Props): JSX
   // "No chats" only once loaded — loading must never flash the disabled state.
   const empty = chats !== undefined && personaChats.length === 0;
 
-  const historyParams = new URLSearchParams({ personaId });
-  if (q !== '') historyParams.set('q', q);
-  historyParams.set('return', returnTo);
+  // The filter text drives a message search on the other side, so it travels
+  // in navigation state, never in the address (spec §10.2).
+  const historyParams = new URLSearchParams({ personaId, return: returnTo });
   const historyHref = `/app/history?${historyParams.toString()}`;
+  const historyState = q === '' ? undefined : { q, gen: currentHistoryGen() };
+  const noMatch = matches.length === 0 && q !== '';
 
   function toggle(): void {
     const next = !open;
@@ -99,6 +103,7 @@ export function RecentChatsAccordion({ personaId, chats, returnTo }: Props): JSX
         ) : !expanded ? (
           <Link
             to={historyHref}
+            state={historyState}
             className="inline-flex min-h-[44px] items-center px-2 text-xs text-paper-soft hover:text-paper"
           >
             History →
@@ -116,7 +121,7 @@ export function RecentChatsAccordion({ personaId, chats, returnTo }: Props): JSX
             onChange={(e) => setFilter(e.target.value)}
             className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none focus:border-paper-soft"
           />
-          {matches.length === 0 && q !== '' ? (
+          {noMatch ? (
             <p className="px-1 text-xs text-paper-soft">{`No chats match "${q}"`}</p>
           ) : (
             <ul aria-label="Recent chats" className="flex flex-col">
@@ -138,9 +143,10 @@ export function RecentChatsAccordion({ personaId, chats, returnTo }: Props): JSX
           <div className="flex justify-end">
             <Link
               to={historyHref}
+              state={historyState}
               className="inline-flex min-h-[44px] items-center px-2 text-xs text-paper-soft hover:text-paper"
             >
-              All in History →
+              {noMatch ? 'Search messages in History →' : 'All in History →'}
             </Link>
           </div>
         </div>

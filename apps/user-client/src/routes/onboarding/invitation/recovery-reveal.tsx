@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { useOnboardingStore } from '../../../state/onboarding.store.js';
 import { StepRecoveryReveal } from '../local/step-recovery-reveal.js';
 import { useReturnUrl } from './_return-url.js';
@@ -12,14 +13,15 @@ import { useReturnUrl } from './_return-url.js';
  */
 export function InvitationRecoveryReveal() {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const returnUrl = useReturnUrl();
   const state = useOnboardingStore((s) => s.state);
 
   useEffect(() => {
     if (state.kind !== 'invitation_recovery') {
-      navigate(returnUrl, { replace: true });
+      nav.returnTo(returnUrl);
     }
-  }, [state.kind, navigate, returnUrl]);
+  }, [state.kind, nav, returnUrl]);
 
   if (state.kind !== 'invitation_recovery') return null;
 
@@ -28,7 +30,8 @@ export function InvitationRecoveryReveal() {
       recoveryKey={state.recoveryKeyString}
       onDone={() => {
         useOnboardingStore.getState().reset();
-        navigate('/app', { replace: true });
+        // The first run ends here: its steps leave the history.
+        nav.resetTo('/app');
       }}
     />
   );

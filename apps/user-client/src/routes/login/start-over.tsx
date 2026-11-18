@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button.js';
+import { useAppNav } from '../../lib/use-app-nav.js';
 import { wipeDevice } from '../../lib/wipe-device.js';
 
 /**
@@ -28,6 +29,7 @@ const CONFIRM_PHRASE = 'start over';
 
 export function StartOver(): JSX.Element {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const [phrase, setPhrase] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -88,7 +90,7 @@ export function StartOver(): JSX.Element {
         <div className="text-center">
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => nav.back('/login')}
             className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
           >
             Back to sign-in

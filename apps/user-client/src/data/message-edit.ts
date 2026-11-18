@@ -157,6 +157,10 @@ async function copyPriorMessages(sourceChatId: string, beforeMessageId: string):
         bookmarked: m.bookmarked,
         bookmarkLabel: m.bookmarkLabel,
         kind: m.kind,
+        // Without seedRole a branched seed greeting goes on the wire and loses
+        // its echo; without the offset a user turn's stamp changes bytes.
+        seedRole: m.seedRole,
+        utcOffsetMinutes: m.utcOffsetMinutes,
         streamingState: m.streamingState,
       });
       if (linked) enqueueSync(tx, 'messages', newMessageId, 'upsert');

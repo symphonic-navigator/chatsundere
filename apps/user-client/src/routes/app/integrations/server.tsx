@@ -37,6 +37,7 @@ import {
 } from '../../../data/mcp-servers.js';
 import { readReturnTo, withReturn } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
+import { useAppNav } from '../../../lib/use-app-nav.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
 import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
@@ -184,6 +185,7 @@ function AddServer({
 }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const location = useLocation();
   const hasProxy = useServerGate('proxy').enabled;
   const upsertDeferred = useUpsertMcpServer({ deferWhenOffline: true });
@@ -251,13 +253,18 @@ function AddServer({
         // The grant exists; finishOrphanedSignIns saves the row from the draft. My
         // Integrations runs it on load, but the chat does not, so a return retries here.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        if (returnTo) void finishOrphanedSignIns().catch(() => undefined);
-        navigate(returnTo ?? INTEGRATIONS_LIST);
+        if (returnTo) {
+          void finishOrphanedSignIns().catch(() => undefined);
+          nav.returnTo(returnTo);
+        } else {
+          nav.returnTo(INTEGRATIONS_LIST);
+        }
         return;
       }
     }
     if (!returnTo) {
-      navigate(`/app/integrations/${serverId}`);
+      // The add form is done: the server's page takes its place in the history.
+      navigate(`/app/integrations/${serverId}`, { replace: true });
       return;
     }
     const row = rows.find((r) => r.id === serverId);
@@ -270,7 +277,8 @@ function AddServer({
         durationMs: 6_000,
       });
     }
-    navigate(returnTo);
+    // Unwind to the chat the card was tapped in, rather than stacking a second one.
+    nav.returnTo(returnTo);
   }
 
   return (
@@ -351,6 +359,7 @@ function IntegrationServerForm({
 }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
+  const nav = useAppNav();
   const proxyGate = useServerGate('proxy');
   const upsert = useUpsertMcpServer();
   const del = useDeleteMcpServer();
@@ -428,7 +437,7 @@ function IntegrationServerForm({
   const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
-  const back = () => navigate(returnTo ?? INTEGRATIONS_LIST);
+  const back = () => nav.returnTo(returnTo ?? INTEGRATIONS_LIST);
 
   function buildAuth(key: string | null): McpAuthResolved | null {
     if (!key) return null;
@@ -606,7 +615,9 @@ function IntegrationServerForm({
           durationMs: 6_000,
         });
       }
-      back();
+      // Save leaves the way ‹ does, or to the chat it came from; Remove goes up to the list.
+      if (returnTo) nav.returnTo(returnTo);
+      else nav.back(INTEGRATIONS_LIST);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -687,7 +698,11 @@ function IntegrationServerForm({
         back={detail}
         // The flow shares the detail page's route, so going "there" means leaving the flow;
         // an opened sign-in stays pending, as the flow's own Back keeps it.
-        onNavigate={(to) => (to === detail ? setReconnect({ kind: 'idle' }) : navigate(to))}
+        onNavigate={(move) =>
+          move.kind === 'back' || move.to === detail
+            ? setReconnect({ kind: 'idle' })
+            : nav.returnTo(move.to)
+        }
         onHelp={onHelp}
       >
         {helpOverlay}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetClientDataDbForTests,
   getClientDataDb,
@@ -145,5 +145,49 @@ describe('third-party import writer', () => {
       conv({ sourceId: 'chatgpt/empty', messages: [] }),
     ]);
     expect(r).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it('stamps each imported user row with the device offset for its own instant', async () => {
+    vi.stubEnv('TZ', 'America/New_York');
+    try {
+      const winter = Date.parse('2026-01-15T12:00:00Z');
+      const summer = Date.parse('2026-07-15T12:00:00Z');
+      await importThirdPartyConversations(personaId, [
+        conv({
+          sourceId: 'chatgpt/offsets',
+          createdAt: winter,
+          messages: [
+            {
+              role: 'user',
+              createdAt: winter,
+              blocks: [{ type: 'text', text: 'a' }],
+              dropped: { ...ZERO },
+            },
+            {
+              role: 'persona',
+              createdAt: winter + 1000,
+              blocks: [{ type: 'text', text: 'b' }],
+              dropped: { ...ZERO },
+            },
+            {
+              role: 'user',
+              createdAt: summer,
+              blocks: [{ type: 'text', text: 'c' }],
+              dropped: { ...ZERO },
+            },
+          ],
+        }),
+      ]);
+      const db = getClientDataDb();
+      const chat = await db.chats.filter((c) => c.importedFrom === 'chatgpt/offsets').first();
+      const ordered = await db.messages
+        .where('chatId')
+        .equals(chat?.id ?? '')
+        .sortBy('createdAt');
+      // Written once at import, so later zone changes never move the stamps.
+      expect(ordered.map((m) => m.utcOffsetMinutes)).toEqual([-300, undefined, -240]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

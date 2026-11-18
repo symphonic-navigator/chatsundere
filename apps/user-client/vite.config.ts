@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Plugin, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { reducedMotionMirror } from './build/reduced-motion-mirror';
 import { buildClientMetadata } from './src/mcp/oauth/client-metadata';
 
 /**
@@ -136,6 +137,9 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Before tailwindcss(): it mirrors the reduced-motion blocks of
+    // src/index.css for the in-app "Reduce animations" switch.
+    reducedMotionMirror(),
     tailwindcss(),
     dbDumpReceiver(),
     oauthDevRoutes(),

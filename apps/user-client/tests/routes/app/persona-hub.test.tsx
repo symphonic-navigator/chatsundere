@@ -151,6 +151,7 @@ function renderHub(personaId: string, suffix = '') {
           <Route path="/app/persona/:id" element={<PersonaHub />} />
           <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel">chat</div>} />
           <Route path="/app/history" element={<div data-testid="history-sentinel">history</div>} />
+          <Route path="/app/circle" element={<div data-testid="circle-sentinel">circle</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -238,6 +239,26 @@ describe('PersonaHub — unknown persona', () => {
     expect(screen.getByText(/persona not found/i)).toBeInTheDocument();
     const backLink = screen.getByRole('link', { name: /back to my circle/i });
     expect(backLink.getAttribute('href')).toBe('/app/circle');
+  });
+});
+
+describe('PersonaHub — opened from a chat', () => {
+  it('the My Circle crumb goes to My Circle, not back to the chat', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    renderHub('p-complete', '?return=%2Fapp%2Fchat%2Fc-1');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'My Circle' }));
+    expect(await screen.findByTestId('circle-sentinel')).toBeInTheDocument();
+  });
+
+  it('‹ with nothing behind still falls back to the chat it was opened from', async () => {
+    state.persona = COMPLETE_PERSONA;
+    state.chats = [];
+    renderHub('p-complete', '?return=%2Fapp%2Fchat%2Fc-1');
+    await waitFor(() => expect(screen.getByTestId('persona-hub')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByTestId('chat-sentinel')).toBeInTheDocument();
   });
 });
 

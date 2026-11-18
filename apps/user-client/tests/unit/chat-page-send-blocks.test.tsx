@@ -161,6 +161,13 @@ async function seedChat(
   return { chatId, userId, replyId };
 }
 
+/** Retry is enabled once the chat's persona has loaded; a click before that is a no-op. */
+async function clickRetryWhenReady(): Promise<void> {
+  const retry = await screen.findByRole('button', { name: /Retry/ });
+  await waitFor(() => expect(retry).toBeEnabled());
+  fireEvent.click(retry);
+}
+
 function newQc() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
@@ -288,7 +295,7 @@ describe('ChatPage — typed send stops', () => {
     assertKey.mockRejectedValue(new ProviderKeyLockedError('nano-gpt', 'NanoGPT'));
     render(<ChatPage />, { wrapper: makeWrapper(newQc(), `/app/chat/${chatId}`) });
 
-    fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+    await clickRetryWhenReady();
     expect(
       await screen.findByText(
         "Your saved key for NanoGPT can't be opened any more. Enter it again to keep chatting.",
@@ -301,13 +308,28 @@ describe('ChatPage — typed send stops', () => {
     expect(await db.syncOutbox.count()).toBe(0);
   });
 
+  it('interrupted-reply Retry waits for the persona: before it loads it is disabled and deletes nothing', async () => {
+    const { db } = await seedPersona();
+    // The chat's persona is not readable (yet): the state a slow persona query leaves.
+    const { chatId, userId, replyId } = await seedChat('persona-not-loaded', db, 'incomplete');
+    render(<ChatPage />, { wrapper: makeWrapper(newQc(), `/app/chat/${chatId}`) });
+
+    const retry = await screen.findByRole('button', { name: /Retry/ });
+    expect(retry).toBeDisabled();
+    fireEvent.click(retry);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sendMutate).not.toHaveBeenCalled();
+    expect(await db.messages.get(userId)).toBeDefined();
+    expect(await db.messages.get(replyId)).toBeDefined();
+  });
+
   it('interrupted-reply Retry still deletes and resends when the key opens', async () => {
     const { db, personaId } = await seedPersona();
     const { chatId, userId, replyId } = await seedChat(personaId, db, 'incomplete');
     sendMutate.mockResolvedValue(chatId);
     render(<ChatPage />, { wrapper: makeWrapper(newQc(), `/app/chat/${chatId}`) });
 
-    fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+    await clickRetryWhenReady();
     await waitFor(() => expect(sendMutate).toHaveBeenCalledTimes(1));
     expect(sendMutate.mock.calls[0]?.[0]).toMatchObject({ chatId, text: 'my precious words' });
     expect(await db.messages.get(userId)).toBeUndefined();
@@ -343,7 +365,7 @@ describe('ChatPage — typed send stops', () => {
       await useRealPreflight();
       render(<ChatPage />, { wrapper: makeWrapper(newQc(), `/app/chat/${chatId}`) });
 
-      fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+      await clickRetryWhenReady();
       await waitFor(() =>
         expect(useToastStore.getState().toasts.map((t) => t.message)).toContain(
           "Couldn't retry just now — your message is kept.",

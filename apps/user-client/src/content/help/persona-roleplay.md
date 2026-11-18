@@ -22,3 +22,5 @@ When enabled, the persona opens every new chat with a freshly generated message 
 Write the rules in the text field — describe the tone, setting, or opening line you want. Leave the field empty and the greeting cannot fire; the amber warning will remind you.
 
 The Greeting toggle is only available when Roleplay is on.
+
+Roleplay characters don't know the date and time unless you turn on **Knows the date and time** under **Model behaviour**.

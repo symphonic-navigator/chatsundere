@@ -1,12 +1,14 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { ChevronDown } from 'lucide-react';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';
 import { BackgroundStreamBadge } from '../components/BackgroundStreamBadge.js';
 import { ConnectivityBadge } from '../components/ConnectivityBadge.js';
 import { GlobalSyncLine } from '../components/GlobalSyncLine.js';
+import { NavTrailTracker } from '../components/NavTrailTracker.js';
 import NavTransitionOutlet from '../components/NavTransitionOutlet.js';
 import { PersonaAvatar } from '../components/PersonaAvatar.js';
 import { SplashContext } from '../components/SplashContext.js';
@@ -15,7 +17,10 @@ import { SyncSurfaceHost } from '../components/SyncSurfaceHost.js';
 import { Toast } from '../components/Toast.js';
 import { anchorFrom } from '../components/chat/ChatQuickMenu.js';
 import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
+import { useSettings } from '../data/settings.js';
 import { copy } from '../lib/copy.js';
+import { applyMotionAttribute, prefersReducedMotion } from '../lib/reduced-motion.js';
+import { useAppNav } from '../lib/use-app-nav.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useCurrentChatStore } from '../state/current-chat.store.js';
 import { useEffectiveChatMode } from '../state/effective-chat-mode.js';
@@ -46,6 +51,7 @@ export function Root() {
   const dismissBanner = useStagingBannerStore((s) => s.dismiss);
   const location = useLocation();
   const navigate = useNavigate();
+  const nav = useAppNav();
   // Effective, not raw store: on desktop the chat has a single (interaction)
   // mode, so the brand bar must never present the reading-mode strip there
   // (spec 2026-07-18 §5.3).
@@ -77,6 +83,15 @@ export function Root() {
     return () => document.body.classList.remove('dim-ambient');
   }, []);
 
+  // The "Reduce animations" switch (My Settings › You) reaches the CSS and the
+  // motion helpers through one root attribute. Undefined while the settings row
+  // loads: the first-paint mirror applied in main.tsx stands until then.
+  const animationsEnabled = useSettings().data?.animationsEnabled;
+  useEffect(() => {
+    if (animationsEnabled === undefined) return;
+    applyMotionAttribute(!animationsEnabled);
+  }, [animationsEnabled]);
+
   const showRolledBackBanner =
     phase.kind === 'ready' && phase.staging.kind === 'rolled_back' && !dismissed;
 
@@ -89,7 +104,7 @@ export function Root() {
     // (no splash this session, or reduced motion).
     if (typeof window === 'undefined') return true;
     if (sessionStorage.getItem('splashShown') !== null) return true;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    if (prefersReducedMotion()) return true;
     return false;
   });
 
@@ -167,6 +182,12 @@ export function Root() {
             ) : (
               <Link
                 to="/"
+                onClick={(e) => {
+                  // Home goes back to the Hall when it is behind, instead of stacking it.
+                  if (!session) return;
+                  e.preventDefault();
+                  nav.returnTo('/app');
+                }}
                 className="brand-logo flex items-center gap-1"
                 style={{ opacity: topbarLogoVisible ? 1 : 0 }}
                 aria-label="Chatsundere home"
@@ -246,6 +267,7 @@ export function Root() {
           </div>
         )}
         <main className="mx-auto w-full max-w-[420px] px-6 pb-12 lg:max-w-[640px]">
+          <NavTrailTracker />
           <NavTransitionOutlet />
         </main>
         <SplashOverlay />

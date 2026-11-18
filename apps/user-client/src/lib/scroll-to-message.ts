@@ -15,3 +15,16 @@ export function scrollToMessage(messageId: string): boolean {
   window.setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), HIGHLIGHT_MS);
   return true;
 }
+
+/**
+ * Jump to a message once it has mounted: one try on the next frame, one retry
+ * a frame later, then `onMissing` when it is still not in the DOM.
+ */
+export function focusMessage(messageId: string, onMissing: () => void): void {
+  requestAnimationFrame(() => {
+    if (scrollToMessage(messageId)) return;
+    requestAnimationFrame(() => {
+      if (!scrollToMessage(messageId)) onMissing();
+    });
+  });
+}

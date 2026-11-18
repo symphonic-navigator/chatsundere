@@ -5,6 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { NavTile } from '../components/ui/NavTile.js';
 import { parseJoinUrl } from '../lib/qr.js';
+import { useAppNav } from '../lib/use-app-nav.js';
 import { useOnboardingStore } from '../state/onboarding.store.js';
 import { toastStore } from '../state/toast.store.js';
 
@@ -34,6 +35,7 @@ import { toastStore } from '../state/toast.store.js';
  */
 export function JoinLanding(): JSX.Element | null {
   const navigate = useNavigate();
+  const nav = useAppNav();
   const session = useSessionStore((s) => s.session);
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
   const setOnboardingState = useOnboardingStore((s) => s.setState);
@@ -52,8 +54,8 @@ export function JoinLanding(): JSX.Element | null {
         ? 'This device is already linked to your account.'
         : "You're already set up on this device. Joining a server from a local-only account isn't available yet — it's on the way.";
     toastStore.show({ message, tone: 'info', durationMs: 6000 });
-    navigate('/app', { replace: true });
-  }, [session, linkStatus, navigate]);
+    nav.resetTo('/app');
+  }, [session, linkStatus, nav]);
 
   // Redirecting — render nothing rather than a flash of the chooser.
   if (session) return null;

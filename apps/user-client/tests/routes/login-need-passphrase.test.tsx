@@ -72,15 +72,21 @@ beforeEach(() => {
   passkeyRows.rows = [{ credential_id: new Uint8Array([1, 2, 3]) }];
 });
 
-const SENTENCE = 'Chatsundere needs your passphrase once more before it can use your keys.';
+const SENTENCE = 'Unlock once more so Chatsundere can use your keys.';
 
 describe('Login with need=passphrase (spec 0.5.0 papercuts, item 7)', () => {
-  it('shows the passkey button disabled, not hidden, with its reason', async () => {
+  it('keeps the passkey button enabled: a passkey unlock restores the keys too', async () => {
     renderLogin(NEED_PATH);
     const passkey = await screen.findByRole('button', { name: /sign in with passkey/i });
-    expect(passkey).toBeDisabled();
-    expect(screen.getByText('This needs your passphrase')).toBeInTheDocument();
-    expect(passkey).toHaveAccessibleDescription('This needs your passphrase');
+    expect(passkey).toBeEnabled();
+    expect(screen.queryByText('This needs your passphrase')).toBeNull();
+    expect(passkey).not.toHaveAccessibleDescription('This needs your passphrase');
+  });
+
+  it('never claims that only the passphrase works', async () => {
+    renderLogin(NEED_PATH);
+    await passphraseInput();
+    expect(screen.queryByText(/needs your passphrase/i)).toBeNull();
   });
 
   it('focuses the passphrase field', async () => {

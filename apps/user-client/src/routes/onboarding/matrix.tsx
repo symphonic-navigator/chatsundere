@@ -61,8 +61,12 @@ const CELLS: readonly Cell[] = [
  * `2026-07-12-onboarding-matrix-makeover-design`).
  */
 export function OnboardingMatrix() {
-  // Clear any stale store state from a previous interrupted attempt.
-  useEffect(() => useOnboardingStore.getState().reset(), []);
+  // Clear any stale store state from a previous interrupted attempt, but never a
+  // recovery key still waiting to be acknowledged (the reveal hold owns that).
+  useEffect(() => {
+    const { state, reset } = useOnboardingStore.getState();
+    if (state.kind !== 'invitation_recovery' && state.kind !== 'local_recovery') reset();
+  }, []);
 
   return (
     <main className="flex min-h-dvh flex-col justify-center gap-3 px-4 py-6">

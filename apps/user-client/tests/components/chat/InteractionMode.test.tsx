@@ -323,6 +323,8 @@ it('Escape with the quick menu open closes only the menu, not the cockpit', () =
         onClose={close}
         onEntranceHall={() => {}}
         onNavigate={() => {}}
+        exportState="ready"
+        onExport={() => {}}
       />
     );
   }

@@ -18,7 +18,10 @@ export interface LoginLocalWithPassphraseArgs {
 
 export interface LoginLocalResult {
   session: MasterKeySession;
-  /** The raw MK bytes, available for callers that need to re-wrap under a new credential. */
+  /**
+   * The raw MK bytes, available for callers that need to re-wrap under a new
+   * credential and for the session store's raw-MK slice.
+   */
   mk: MasterKey;
 }
 

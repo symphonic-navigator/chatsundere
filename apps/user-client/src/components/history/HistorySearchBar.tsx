@@ -9,7 +9,7 @@ interface Props {
 export function HistorySearchBar({
   value,
   onChange,
-  placeholder = 'Search chats by title…',
+  placeholder = 'Search titles and messages…',
 }: Props): JSX.Element {
   return (
     <label className="block">

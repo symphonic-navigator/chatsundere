@@ -4,6 +4,7 @@ import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { getDb } from '../boot/open-db.js';
 import { resetEngineStateForLocalOnly } from '../sync/link-reset.js';
 import { logoutCurrentSession } from './auth-logout.js';
+import { rotateHistoryGen } from './history-return.js';
 
 /**
  * Make THIS device local-only (spec: sync-lifecycle hardening). Revokes the
@@ -30,6 +31,7 @@ export async function decoupleDevice(): Promise<{ sessionRevoked: boolean }> {
   await deleteLinkedAccount(getDb());
   useAccountLinkStore.getState().setLocalOnly();
   await resetEngineStateForLocalOnly();
+  rotateHistoryGen();
 
   return { sessionRevoked };
 }

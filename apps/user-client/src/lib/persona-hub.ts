@@ -3,6 +3,7 @@ import { getCanonical, isUnsuitableAsBackgroundWorker } from '@chatsundere/llm-u
 import type { MindspaceRow, PersonaRow } from '../boot/client-data-db.js';
 import { hasBackgroundHelper } from '../data/resolve-background-offering.js';
 import { DEFAULT_PERSONA_INSTRUCTIONS } from './persona-defaults.js';
+import { resolveTimeAwareness } from './time-awareness.js';
 
 /** A persona that cannot yet chat: missing instructions or a complete model choice. */
 export function isPersonaIncomplete(p: PersonaRow): boolean {
@@ -45,9 +46,13 @@ export function roleplayMeta(p: PersonaRow): string {
   return p.greetingEnabled ? `${person} · Greeting` : person;
 }
 
+/** Model behaviour tile meta. `Timeless` shows only when time awareness is
+ *  off: the deviation from the default is what is worth showing. */
 export function modelBehaviourMeta(p: PersonaRow): string {
-  const temp = `Temp ${p.temperature.toFixed(2)}`;
-  return p.askExpertDefault ? `${temp} · Expert` : temp;
+  const parts = [`Temp ${p.temperature.toFixed(2)}`];
+  if (p.askExpertDefault) parts.push('Expert');
+  if (!resolveTimeAwareness(p)) parts.push('Timeless');
+  return parts.join(' · ');
 }
 
 export function integrationsMeta(p: PersonaRow): string {

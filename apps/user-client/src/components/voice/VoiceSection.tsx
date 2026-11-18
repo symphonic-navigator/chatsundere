@@ -420,6 +420,9 @@ export function VoiceSection(): JSX.Element {
             Brief emoji showers your Circle can sprinkle into a reply — a celebration, a flirt, a
             punchline.
           </p>
+          <p className="mt-1 text-[11px] text-paper-soft">
+            They play gently while Reduce animations is on (My Settings › You).
+          </p>
         </div>
       </div>
     </div>

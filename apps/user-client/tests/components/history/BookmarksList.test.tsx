@@ -43,6 +43,21 @@ const groups: BookmarkGroup[] = [
 ];
 
 describe('BookmarksList', () => {
+  it('shows a matched snippet under the label, its words marked', () => {
+    const [g] = groups;
+    if (!g?.bookmarks[0]) throw new Error('fixture');
+    const withSnippet = [
+      {
+        ...g,
+        bookmarks: [{ ...g.bookmarks[0], snippet: { text: 'smoked paprika', marks: [[7, 14]] } }],
+      },
+    ] as Parameters<typeof BookmarksList>[0]['groups'];
+    wrap(<BookmarksList groups={withSnippet} onJump={() => {}} />);
+    const mark = document.querySelector('mark.cs-search-mark');
+    expect(mark?.textContent).toBe('paprika');
+    expect(mark?.closest('.line-clamp-1')?.textContent).toBe('smoked paprika');
+  });
+
   it('groups by chat with a chat-title header and the bookmark label', () => {
     wrap(<BookmarksList groups={groups} onJump={() => {}} />);
     expect(screen.getByText('My chat')).toBeTruthy();
