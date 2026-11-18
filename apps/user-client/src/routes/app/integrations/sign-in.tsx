@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
 import { SAVING_LATER } from '../../../components/mcp/sign-in-copy.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
@@ -13,8 +13,10 @@ import { useServerGate } from '../../../lib/server-gate.js';
 import { saveConnectedServer, testOAuthConnection } from '../../../mcp/oauth/connect-server.js';
 import type { ServerDraft } from '../../../mcp/oauth/sign-in.js';
 import { toastStore } from '../../../state/toast.store.js';
+import { connectedToast, readReturnTo, withReturn } from './server.js';
 
 const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as const;
+const LIST = '/app/integrations';
 
 /**
  * The waiting screen of a pending sign-in, reached from its row in My Integrations or
@@ -23,6 +25,9 @@ const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as cons
 export function PendingSignInPage(): JSX.Element {
   const { state } = useParams();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  // The connector card's *Continue sign-in* comes here with the chat it was tapped in.
+  const returnTo = readReturnTo(search);
   const { onHelp, helpOverlay } = useHelp('integrations');
   const servers = useMcpServers();
   const hasProxy = useServerGate('proxy').enabled;
@@ -41,17 +46,24 @@ export function PendingSignInPage(): JSX.Element {
       } catch {
         // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        navigate('/app/integrations');
+        navigate(returnTo ?? LIST);
         return;
       }
     }
-    navigate(`/app/integrations/${serverId}`);
+    if (!returnTo) {
+      navigate(`/app/integrations/${serverId}`);
+      return;
+    }
+    const name = servers.data?.find((r) => r.id === serverId)?.name ?? draft?.name;
+    if (name)
+      toastStore.show({ message: connectedToast(name), tone: 'success', durationMs: 6_000 });
+    navigate(returnTo);
   }
 
   return (
     <PageScaffold
       crumbs={[CRUMB_ROOT, { label: 'Sign-in' }]}
-      back="/app/integrations"
+      back={returnTo ?? LIST}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -63,9 +75,12 @@ export function PendingSignInPage(): JSX.Element {
           mode="page"
           onConnected={(r) => onConnected(r.serverId, r.draft)}
           onUseKey={(link) =>
-            navigate('/app/integrations/new', link ? { state: { useKeyFor: link } } : undefined)
+            navigate(
+              withReturn('/app/integrations/new', returnTo),
+              link ? { state: { useKeyFor: link } } : undefined,
+            )
           }
-          onClose={() => navigate('/app/integrations')}
+          onClose={() => navigate(returnTo ?? LIST)}
         />
       </div>
     </PageScaffold>

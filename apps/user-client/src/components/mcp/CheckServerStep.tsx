@@ -76,6 +76,8 @@ export function CheckServerStep(props: {
   initialLink?: string;
   autoCheck?: boolean;
   suggestedHost?: string | null;
+  /** The chat *Add server* was opened from; *Link a server* then comes back to it. */
+  returnTo?: string | null | undefined;
   onLinkEdited?: () => void;
   onResult: (result: Exclude<CheckResult, Unreachable>, link: string) => void;
   onManual: (link: string) => void;
@@ -175,7 +177,13 @@ export function CheckServerStep(props: {
           <FailureMessage
             failure={failure}
             linked={linked}
-            onLink={() => navigate('/app/account/server-linking')}
+            onLink={() =>
+              navigate(
+                props.returnTo
+                  ? `/app/account/server-linking?return=${encodeURIComponent(props.returnTo)}`
+                  : '/app/account/server-linking',
+              )
+            }
           />
           <Button tone="neutral" className="self-start" onClick={() => void onCheck()}>
             Try again

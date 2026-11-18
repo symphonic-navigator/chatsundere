@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { checkServerMock } = vi.hoisted(() => ({ checkServerMock: vi.fn() }));
+const { checkServerMock, link } = vi.hoisted(() => ({
+  checkServerMock: vi.fn(),
+  link: { status: 'linked' },
+}));
 
 vi.mock('@chatsundere/ui-shared', () => ({
   useAccountLinkStore: (selector: (s: { linkStatus: string }) => unknown) =>
-    selector({ linkStatus: 'linked' }),
+    selector({ linkStatus: link.status }),
 }));
 vi.mock('../../../src/mcp/oauth/check-server.js', () => ({
   checkServer: (...a: unknown[]) => checkServerMock(...a),
@@ -194,5 +197,65 @@ describe('CheckServerStep with a link from the chat', () => {
     await user.type(field, 'x');
     expect(onLinkEdited).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(SUGGESTED)).toBeNull();
+  });
+});
+
+function Where(): JSX.Element {
+  const { pathname, search } = useLocation();
+  return <div data-testid="where">{pathname + search}</div>;
+}
+
+describe('CheckServerStep: Link a server', () => {
+  beforeEach(() => {
+    checkServerMock.mockReset();
+    link.status = 'local-only';
+    checkServerMock.mockResolvedValue({
+      kind: 'unreachable',
+      directOnly: true,
+      error: 'x',
+      cause: 'probe',
+    });
+  });
+  afterEach(() => {
+    link.status = 'linked';
+  });
+
+  async function linkFrom(returnTo?: string | null): Promise<string> {
+    render(
+      <MemoryRouter initialEntries={['/app/integrations/new']}>
+        <Routes>
+          <Route
+            path="/app/integrations/new"
+            element={
+              <CheckServerStep
+                hasProxy={false}
+                returnTo={returnTo}
+                onResult={vi.fn()}
+                onManual={vi.fn()}
+              />
+            }
+          />
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Server link'), 'https://kumbu.example/mcp');
+    await user.click(screen.getByRole('button', { name: 'Check server' }));
+    await user.click(await screen.findByRole('button', { name: 'Link a server' }));
+    return (await screen.findByTestId('where')).textContent ?? '';
+  }
+
+  it('carries the chat as ?return= when there is one', async () => {
+    expect(await linkFrom('/app/chat/c1')).toBe(
+      `/app/account/server-linking?return=${encodeURIComponent('/app/chat/c1')}`,
+    );
+  });
+
+  it.each([
+    ['no return', undefined],
+    ['a null return', null],
+  ])('keeps today’s target with %s', async (_label, returnTo) => {
+    expect(await linkFrom(returnTo)).toBe('/app/account/server-linking');
   });
 });

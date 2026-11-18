@@ -2,7 +2,7 @@
 
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { uuidv7 } from 'uuidv7';
 import type { McpServerRow } from '../../../boot/client-data-db.js';
 import { CheckServerStep, SuggestedInChat } from '../../../components/mcp/CheckServerStep.js';
@@ -33,6 +33,7 @@ import {
   useMcpServers,
   useUpsertMcpServer,
 } from '../../../data/mcp-servers.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { testMcpConnection } from '../../../mcp/mcp-connectivity.js';
 import { type CheckResult, checkServer } from '../../../mcp/oauth/check-server.js';
@@ -59,6 +60,31 @@ type TestState = { kind: 'idle' } | { kind: 'testing' } | { kind: 'done' };
 const NEEDS_LINKED_SERVER = '○ Needs a linked Chatsundere server';
 
 const CRUMB_ROOT = { label: 'My Integrations', to: '/app/integrations' } as const;
+const LIST = '/app/integrations';
+
+/**
+ * The page a `?return=` names, or null when there is none or it is not a site-relative
+ * path (spec §5.5). It never leaves the device; it only steers this page's exits.
+ */
+export function readReturnTo(search: URLSearchParams): string | null {
+  return safeReturnPath(search.get('return'), '') || null;
+}
+
+/** `path` with the same `?return=`, so the next page comes home too. */
+export function withReturn(path: string, returnTo: string | null): string {
+  return returnTo ? `${path}?return=${encodeURIComponent(returnTo)}` : path;
+}
+
+/** Shown on the chat after a server from the chat was connected (OAuth). */
+export function connectedToast(name: string): string {
+  return `${name} is connected. Its tools are ready on your next message.`;
+}
+
+/** Shown on the chat after a key or open server from the chat was saved. */
+function addedToast(name: string): string {
+  return `${name} is added. Its tools are ready on your next message.`;
+}
+
 const inputClass =
   'w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 font-mono text-sm text-paper outline-none';
 
@@ -70,6 +96,8 @@ const inputClass =
  */
 export function IntegrationServerPage(): JSX.Element {
   const { serverId } = useParams();
+  const [search] = useSearchParams();
+  const returnTo = readReturnTo(search);
   const servers = useMcpServers();
   const { onHelp, helpOverlay } = useHelp('integrations');
 
@@ -77,7 +105,7 @@ export function IntegrationServerPage(): JSX.Element {
     return (
       <PageScaffold
         crumbs={[CRUMB_ROOT, { label: 'Loading…' }]}
-        back="/app/integrations"
+        back={returnTo ?? LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -92,7 +120,7 @@ export function IntegrationServerPage(): JSX.Element {
     return (
       <PageScaffold
         crumbs={[CRUMB_ROOT, { label: 'Unknown' }]}
-        back="/app/integrations"
+        back={returnTo ?? LIST}
         onHelp={onHelp}
       >
         {helpOverlay}
@@ -103,8 +131,8 @@ export function IntegrationServerPage(): JSX.Element {
     );
   }
 
-  if (existing) return <IntegrationServerForm existing={existing} />;
-  return <AddServer rows={servers.data ?? []} />;
+  if (existing) return <IntegrationServerForm existing={existing} returnTo={returnTo} />;
+  return <AddServer rows={servers.data ?? []} returnTo={returnTo} />;
 }
 
 /** Seed of the manual form, from a check result or a typed link. */
@@ -162,7 +190,13 @@ type AddPhase =
  * *Add server* (spec §9 "Connect"): the link and *Check server* first; the result
  * decides what follows. *Enter details manually* reveals today's whole form.
  */
-function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
+function AddServer({
+  rows,
+  returnTo,
+}: {
+  rows: McpServerRow[];
+  returnTo: string | null;
+}): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
   const location = useLocation();
@@ -188,7 +222,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
     }
   }, []);
 
-  if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} />;
+  if (phase.kind === 'form') return <IntegrationServerForm seed={phase.seed} returnTo={returnTo} />;
 
   // The form that follows a proposal starts named after the host, and on by default (§5.3).
   const proposalSeed = (): Partial<FormSeed> =>
@@ -231,17 +265,24 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
       } catch {
         // The grant exists; the list's finishOrphanedSignIns saves the row from the draft.
         toastStore.show({ message: SAVING_LATER, tone: 'info', durationMs: 6_000 });
-        navigate('/app/integrations');
+        navigate(returnTo ?? LIST);
         return;
       }
     }
-    navigate(`/app/integrations/${serverId}`);
+    if (!returnTo) {
+      navigate(`/app/integrations/${serverId}`);
+      return;
+    }
+    const name = rows.find((r) => r.id === serverId)?.name ?? draft?.name ?? hostOfLink(link);
+    if (name)
+      toastStore.show({ message: connectedToast(name), tone: 'success', durationMs: 6_000 });
+    navigate(returnTo);
   }
 
   return (
     <PageScaffold
       crumbs={[CRUMB_ROOT, { label: 'Add MCP server' }]}
-      back="/app/integrations"
+      back={returnTo ?? LIST}
       onHelp={onHelp}
     >
       {helpOverlay}
@@ -252,6 +293,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
             initialLink={link}
             autoCheck={fromChat !== null}
             suggestedHost={fromChat?.host ?? null}
+            returnTo={returnTo}
             onLinkEdited={() => setFromChat(null)}
             onResult={onResult}
             onManual={(typed) =>
@@ -279,7 +321,7 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
                 seed: { url: phase.check.endpoint, authScheme: 'bearer', ...proposalSeed() },
               })
             }
-            onOpenExisting={(id) => navigate(`/app/integrations/${id}`)}
+            onOpenExisting={(id) => navigate(withReturn(`/app/integrations/${id}`, returnTo))}
           />
         ) : null}
         {phase.kind === 'flow' ? (
@@ -306,9 +348,12 @@ function AddServer({ rows }: { rows: McpServerRow[] }): JSX.Element {
 function IntegrationServerForm({
   existing,
   seed,
+  returnTo,
 }: {
   existing?: McpServerRow;
   seed?: FormSeed;
+  /** Where every exit goes when the page was opened from a chat (spec §5.5). */
+  returnTo: string | null;
 }): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('integrations');
   const navigate = useNavigate();
@@ -389,7 +434,7 @@ function IntegrationServerForm({
   const offerLinking = !linked && oauthStatus === NEEDS_LINKED_SERVER;
 
   const effectivePrefix = prefixEdited ? prefix : sanitiseToolName(name);
-  const back = () => navigate('/app/integrations');
+  const back = () => navigate(returnTo ?? LIST);
 
   function buildAuth(key: string | null): McpAuthResolved | null {
     if (!key) return null;
@@ -560,6 +605,9 @@ function IntegrationServerForm({
       };
       await upsert.mutateAsync(row);
       setDirty(false);
+      if (returnTo && !existing) {
+        toastStore.show({ message: addedToast(name), tone: 'success', durationMs: 6_000 });
+      }
       back();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -658,7 +706,7 @@ function IntegrationServerForm({
   return (
     <PageScaffold
       crumbs={[CRUMB_ROOT, { label: existing ? existing.name : 'Add MCP server' }]}
-      back="/app/integrations"
+      back={returnTo ?? LIST}
       onHelp={onHelp}
       dirty={dirty}
     >
@@ -673,7 +721,9 @@ function IntegrationServerForm({
             starting={reconnect.kind === 'checking'}
             startError={reconnectError}
             onSignInAgain={() => void onSignInAgain()}
-            onReturnToSignIn={() => pendingHere && navigate(waitingScreenPath(pendingHere.state))}
+            onReturnToSignIn={() =>
+              pendingHere && navigate(withReturn(waitingScreenPath(pendingHere.state), returnTo))
+            }
           />
         ) : null}
         {seed?.suggestedHost && !existing && suggestionKept ? (
@@ -685,7 +735,10 @@ function IntegrationServerForm({
             className="self-start"
             onClick={() =>
               navigate(
-                `/app/account/server-linking?return=${encodeURIComponent(`/app/integrations/${existing.id}`)}`,
+                withReturn(
+                  '/app/account/server-linking',
+                  withReturn(`/app/integrations/${existing.id}`, returnTo),
+                ),
               )
             }
           >
