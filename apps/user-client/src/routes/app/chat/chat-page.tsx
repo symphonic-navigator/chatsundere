@@ -67,6 +67,7 @@ import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.
 import { useLiveVoiceIdle } from '../../../lib/voice/live/use-live-voice-idle.js';
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
+import { useReadAloudMediaSession } from '../../../lib/voice/use-read-aloud-media-session.js';
 import { useScreenWakeLock } from '../../../lib/voice/use-screen-wake-lock.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
@@ -720,6 +721,8 @@ export function ChatPage(): JSX.Element {
   // forceStreamingRead = isLiveVoice: in live voice every reply is read aloud as
   // it streams (the persona's floor), independent of the auto-read toggle.
   const voice = useVoicePlayback(activeChatId ?? '', effectivePersona, messages, isLiveVoice);
+  // Lock-screen and headset controls for read-aloud (never live voice, never message text).
+  useReadAloudMediaSession(voice, effectivePersona, isLiveVoice);
 
   const monologue = useMonologuePlayback(effectivePersona, () => voice.stop());
   const monologueActive = monologue.activeId !== null;

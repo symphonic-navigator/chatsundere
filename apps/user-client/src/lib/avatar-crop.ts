@@ -15,23 +15,38 @@ export function fitDimensions(
 }
 
 /**
- * CSS background props that reproduce a crop inside a square box of `size` px.
- * Model: cover the box, multiply by `zoom`, then pan by a fraction of `size`.
+ * Where the whole image lands inside a square box of `size` px under a crop, in
+ * box pixels. Model: cover the box, multiply by `zoom`, then pan by a fraction
+ * of `size`. The one source for both the CSS background and canvas renders.
  */
+export function cropToRect(
+  naturalWidth: number,
+  naturalHeight: number,
+  crop: AvatarCrop,
+  size: number,
+): { x: number; y: number; width: number; height: number } {
+  const coverScale = Math.max(size / naturalWidth, size / naturalHeight);
+  const scale = coverScale * crop.zoom;
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+  return {
+    x: (size - width) / 2 + crop.x * size,
+    y: (size - height) / 2 + crop.y * size,
+    width,
+    height,
+  };
+}
+
+/** CSS background props that reproduce a crop inside a square box of `size` px. */
 export function cropToBackground(
   naturalWidth: number,
   naturalHeight: number,
   crop: AvatarCrop,
   size: number,
 ): { backgroundSize: string; backgroundPosition: string } {
-  const coverScale = Math.max(size / naturalWidth, size / naturalHeight);
-  const scale = coverScale * crop.zoom;
-  const bgW = naturalWidth * scale;
-  const bgH = naturalHeight * scale;
-  const bgX = (size - bgW) / 2 + crop.x * size;
-  const bgY = (size - bgH) / 2 + crop.y * size;
+  const rect = cropToRect(naturalWidth, naturalHeight, crop, size);
   return {
-    backgroundSize: `${bgW}px ${bgH}px`,
-    backgroundPosition: `${bgX}px ${bgY}px`,
+    backgroundSize: `${rect.width}px ${rect.height}px`,
+    backgroundPosition: `${rect.x}px ${rect.y}px`,
   };
 }
