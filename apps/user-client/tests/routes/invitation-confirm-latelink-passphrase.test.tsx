@@ -146,6 +146,27 @@ describe('InvitationConfirm — late link proves the passphrase and lands on the
     expect(state.session?.mode).toBe('linked');
   });
 
+  it('sends nothing and lands on /login when the store empties during the passphrase proof', async () => {
+    let resolveProof: () => void = () => {};
+    loginLocalImpl = () =>
+      new Promise((resolve) => {
+        resolveProof = () => resolve(proofResult());
+      });
+    renderConfirm();
+
+    await submitPassphrase('correct horse');
+    await waitFor(() => expect(loginLocalWithPassphrase).toHaveBeenCalledTimes(1));
+
+    // Sign-out while the (slow) proof runs zeroes the MK captured at render.
+    useSessionStore.getState().closeAndForget();
+    resolveProof();
+
+    expect(await screen.findByText('login page')).toBeInTheDocument();
+    expect(linkToServer).not.toHaveBeenCalled();
+    expect(setSessionSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('lands on /login without setSession when the store empties during linkToServer', async () => {
     let resolveLink: () => void = () => {};
     linkToServerImpl = () =>

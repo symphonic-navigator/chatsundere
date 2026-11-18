@@ -214,6 +214,15 @@ function InvitationConfirmInner() {
         // intact (§3.4.1). A wrong passphrase throws `wrong_passphrase`.
         const proof = await loginLocalWithPassphrase({ db: getDb(), passphrase });
         proof.session.close();
+        // The proof is slow (KDF), so re-read the MK rather than trust the one
+        // captured at render: a sign-out meanwhile zeroes that buffer in place,
+        // and `linkToServer` would wrap all zeros for the server. Nothing has been
+        // sent yet, so the user simply unlocks again.
+        const liveMk = useSessionStore.getState().mk;
+        if (!liveMk) {
+          navigate('/login', { replace: true });
+          return;
+        }
         if (renamed) {
           await changeUsername({ db: getDb(), newUsername: cleanUsername });
         }
@@ -225,7 +234,7 @@ function InvitationConfirmInner() {
           baseUrl: storeCtx.baseUrl,
           issuerLabel: null,
           passphrase,
-          mk: localMk,
+          mk: liveMk,
         });
         useConnectivityStore.getState().onServerOk();
         // Re-read the session: it may have gone during the await (sign-out, a
