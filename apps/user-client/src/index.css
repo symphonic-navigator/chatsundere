@@ -6044,8 +6044,20 @@ html {
   width: auto;
   height: auto;
 }
+/* Where a ⋯ trigger follows (History's bookmark rows), the two used to share
+   an 8 px gap that the trigger's 44 px box took almost entirely, leaving the
+   one-tap "Remove bookmark" star 15 px wide (Laura, pre-squash hard finding).
+   The gap widens to 1.5rem and the trigger gives up its negative margin on the
+   star's side, so each takes half of a 24 px gap: the star's hit area is
+   10 + 4 + 12 = 26 px wide, above the 24 px floor, without overlap. */
+.cs-row-trailing:has(.treasury-row-star + .cs-overflow) {
+  gap: 1.5rem;
+}
+.treasury-row-star + .cs-overflow .cs-overflow-trigger {
+  margin-inline-start: 0;
+}
 .treasury-row-star:has(+ .cs-overflow)::before {
-  right: -1px;
+  right: -12px;
 }
 
 /* The provider page's show-key eye sits 0.5rem right of the key field, inside

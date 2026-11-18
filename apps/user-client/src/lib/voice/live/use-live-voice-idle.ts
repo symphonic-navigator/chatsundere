@@ -6,9 +6,9 @@ import type { Floor } from './live-voice-machine.js';
 export const LIVE_VOICE_IDLE_MS = 300_000;
 
 /**
- * True once `floor` has stayed `'listening'` for `ms` without a break while
- * live voice is on. Any other floor (speech detected, a reply) or leaving
- * live voice resets it at once.
+ * True once `floor` has stayed in a quiet state (`'listening'`, `'held'` or
+ * `'sttFailed'`) for `ms` without a break while live voice is on. Speech, a
+ * transcription or a reply, or leaving live voice, resets it at once.
  */
 export function useLiveVoiceIdle(
   floor: Floor,
@@ -16,7 +16,11 @@ export function useLiveVoiceIdle(
   ms: number = LIVE_VOICE_IDLE_MS,
 ): boolean {
   const [idle, setIdle] = useState(false);
-  const counting = isLiveVoice && floor === 'listening';
+  // Held and a failed transcription close the mic but leave the session open,
+  // so they count towards the ceiling too (Laura, pre-squash): a session parked
+  // there must not keep the screen lit for ever.
+  const counting =
+    isLiveVoice && (floor === 'listening' || floor === 'held' || floor === 'sttFailed');
 
   useEffect(() => {
     setIdle(false);

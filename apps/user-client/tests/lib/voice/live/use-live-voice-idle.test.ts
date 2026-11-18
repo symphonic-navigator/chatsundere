@@ -39,6 +39,16 @@ describe('useLiveVoiceIdle', () => {
     expect(result.current).toBe(true);
   });
 
+  it('counts held and a failed transcription as quiet, without restarting', () => {
+    const { result, rerender } = setup('listening');
+    act(() => vi.advanceTimersByTime(FIVE_MIN / 2));
+    rerender({ f: 'held', live: true });
+    act(() => vi.advanceTimersByTime(FIVE_MIN / 4));
+    rerender({ f: 'sttFailed', live: true });
+    act(() => vi.advanceTimersByTime(FIVE_MIN / 4));
+    expect(result.current).toBe(true);
+  });
+
   it('speech before the ceiling restarts the count', () => {
     const { result, rerender } = setup('listening');
     act(() => vi.advanceTimersByTime(FIVE_MIN - 1000));

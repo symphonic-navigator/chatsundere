@@ -25,7 +25,10 @@ export function useKeyboardOpen(): void {
     if (!vv) return;
     const root = document.documentElement;
     const update = (): void => {
-      if (vv.height < window.innerHeight - KEYBOARD_THRESHOLD_PX) {
+      // Pinch-zoom shrinks the visual viewport too; only an unzoomed shrink is
+      // the keyboard (Laura, pre-squash).
+      const unzoomed = Math.abs((vv.scale ?? 1) - 1) < 0.01;
+      if (unzoomed && vv.height < window.innerHeight - KEYBOARD_THRESHOLD_PX) {
         root.setAttribute(KEYBOARD_OPEN_ATTRIBUTE, '');
       } else root.removeAttribute(KEYBOARD_OPEN_ATTRIBUTE);
     };

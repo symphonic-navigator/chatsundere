@@ -5,6 +5,7 @@ import { useKeyboardOpen } from '../../src/lib/use-keyboard-open.js';
 
 class FakeVisualViewport extends EventTarget {
   height: number;
+  scale = 1;
   constructor(height: number) {
     super();
     this.height = height;
@@ -30,6 +31,15 @@ describe('useKeyboardOpen', () => {
     if (original) Object.defineProperty(window, 'visualViewport', original);
     else Reflect.deleteProperty(window, 'visualViewport');
     document.documentElement.removeAttribute('data-keyboard-open');
+  });
+
+  it('ignores a shrink caused by pinch-zoom', () => {
+    const vv = new FakeVisualViewport(800);
+    install(vv);
+    renderHook(() => useKeyboardOpen());
+    vv.scale = 2;
+    vv.resizeTo(400);
+    expect(isOpen()).toBe(false);
   });
 
   it('marks <html> while the visual viewport is shrunk by more than 120 px', () => {
