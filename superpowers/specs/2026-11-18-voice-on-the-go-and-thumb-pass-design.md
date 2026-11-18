@@ -56,7 +56,7 @@ What a headless browser cannot show is whether an OS draws lock-screen controls.
 - **The key fact:** our playback runs through an `AudioContext` (`audio-sink.ts`: decode, `AudioBufferSourceNode` → filter chain → `AnalyserNode` → `ctx.destination`). Platforms attach their media controls to **media elements** (`<audio>`/`<video>`), not to Web Audio output. Chrome on Android shows its media notification for media-element playback; Safari on iOS shows "Now Playing" for media-element playback. Web Audio alone is, as far as I know, not enough on either. So setting `navigator.mediaSession` alone would most likely do nothing on a phone. This is my understanding from the platforms' documented behaviour, not something this container can prove; it is the first thing the manual verification checks.
 - **The plan therefore routes the sink's output through a media element** (the "bridge"): the analyser connects to a `MediaStreamAudioDestinationNode` instead of `ctx.destination`, and one hidden `<audio>` element per `AudioSink` plays that stream. The filter chain, the analyser (spectrum visualiser) and sample-accurate pause all stay as they are. If the bridge element refuses to play (autoplay policy, an old browser), the sink falls back to `ctx.destination` for its lifetime and Media Session is simply not offered: today's behaviour.
 
-Expected support, to be confirmed on device (Manual verification, steps 1–9):
+Expected support, to be confirmed on device (Manual verification, steps 1–14):
 
 | Platform | Wake lock | Lock-screen / headset controls |
 |---|---|---|
@@ -93,13 +93,20 @@ Expected support, to be confirmed on device (Manual verification, steps 1–9):
 - Every `mediaSession` call is feature-detected and wrapped (`setActionHandler` throws on an unknown action in some browsers).
 - The monologue (inner-thought read) gets the wake lock but not lock-screen controls: it is short, and has its own tap-to-stop pill.
 
-**`AudioSink` bridge** (`lib/voice/audio-sink.ts`): the sink gains an opt-in output bridge (the constructor takes `{ mediaElementBridge: boolean }`; read-aloud passes `true`, the monologue sink `false`). `pause()` additionally pauses the bridge element and `resume()` plays it, so the OS sees the true state. `dispose()` stops and detaches the element. Existing behaviour is unchanged when the bridge is off.
+**`AudioSink` bridge** (`lib/voice/audio-sink.ts`): the sink gains a switchable output route, `setRoute('bridge' | 'direct')`; the monologue sink is always `direct`. Existing behaviour is exactly the `direct` route. The read-aloud sink is shared with live voice (one sink per chat view, `use-voice-playback.ts`), so the route and the element's play state are tied to **read-aloud's state, not to the sink's lifetime** (Laura, hard finding):
+
+- **Live voice: `direct`.** While `isLiveVoice`, the analyser feeds `ctx.destination`, so no media element plays and no OS surface can appear. A headset press or the notification shade can then never silence the persona while the app and the open mic carry on.
+- **Read-aloud speaking or waiting: `bridge`, element playing.** **Paused:** element paused. **Idle:** element paused (its `srcObject` kept for the next read), so no stale entry outlives the read; a `MediaStream` keeps flowing silence, so an element left playing would linger on the lock screen.
+- **The element's own events feed back.** If the OS pauses or plays the element itself (a default action the browser takes when no handler is set, or a race), its `pause`/`play` events become `voice.pause()`/`voice.resumeAudio()`, so the app's state and what the OS shows can never split.
+- **Priming and retry.** iOS and Chrome allow `play()` on a media element only from a user gesture or after one. The element is primed (a muted `play()`) on the first gesture in the chat: send, the mic, a Read button. If the bridge is still refused, that read falls back to `direct` without lock-screen controls, and **the next read tries again**; it never gives up for the rest of the chat, so whether controls appear does not depend on whether the first read of a session was manual or automatic.
+- `dispose()` stops and detaches the element.
 
 ### Questions for Chris (Part A)
 
 - **Q2. Keep the screen awake while read-aloud is paused?** *Recommendation: no, release on pause and take it back on resume.* A pause often means "I'm done for now"; a lock held by a forgotten pause drains the battery, and the lock-screen controls still resume it.
 - **Q3. What appears on the lock screen for an adult persona?** *Recommendation: for a persona with the adult flag on, show "Chatsundere" as the title and the app icon as artwork, not the persona's name and avatar.* Anyone near the phone sees the lock screen; an explicit avatar there is the kind of leak a privacy-first app must not have. Non-adult personas show name and avatar, as briefed.
-- **Q4. Lock-screen controls during live voice?** *Recommendation: no.* Live voice is a conversation loop with its own floor logic (barge, hold); "pause" from a headset would have to mean "hold the mic", which is a new interaction to design. The wake lock covers the main live-voice problem (the screen locking mid-conversation).
+- **Q4. Lock-screen controls during live voice?** *Recommendation: no.* Live voice is a conversation loop with its own floor logic (barge, hold); "pause" from a headset would have to mean "hold the mic", which is a new interaction to design. The wake lock covers the main live-voice problem (the screen locking mid-conversation). With the `direct` route in live voice (above), the platform cannot put controls there on its own either.
+- **Q5. A ceiling for a forgotten live-voice session?** Today the phone's own lock timeout is an accidental safety net: put the phone down, forget it, and the screen locks and live voice stops. The wake lock removes that net, and the live-voice machine has no idle exit (every exit is the user's). A forgotten session would keep the screen lit and the microphone open, and nearby speech would start a turn sent to the provider. *Recommendation (Laura's): an opinionated ceiling, no setting. After 5 minutes of continuous listening with no speech detected, let the `'live-voice'` reason go. The screen then locks on its normal timeout and live voice ends exactly as it does today.* Live voice itself is not ended by us; only the wake lock steps back. Any detected speech restarts the 5 minutes.
 
 ---
 
@@ -169,7 +176,9 @@ Screens that need content the sweep could not create (a chat with replies, histo
 1. **Controls that paint no box** (glyphs, text buttons, links, the switch track's surroundings): an invisible hit area. A new utility class **`.cs-hit`** in `src/index.css`:
    - `position: relative` on the host; a `::before` (or `::after` where `::before` is already taken) with `content: ''`, `position: absolute`, centred, `width: max(100%, 44px)`, `height: max(100%, 44px)`. A pointer on the pseudo-element is a pointer on the host, so `onClick` and focus work unchanged. Nothing is painted, nothing in the layout moves.
    - Where a host already uses both pseudo-elements (e.g. `.brand-logo`'s sparkle), or sits in an `overflow: hidden` parent that would clip the pseudo-element (the breadcrumb row), the same effect comes from padding with an equal negative margin (`padding-block: X; margin-block: -X`): a bigger box, the same visible spot.
-   - **Never overlap a neighbour.** Where controls sit closer than 44 apart, the hit area grows into the gap and stops at half of it. Only the mindspace swatch row is affected (28 px swatches at its current spacing); it gets 44 high and as wide as the gap allows, measured and stated in the report.
+   - **Never overlap a neighbour.** A positioned pseudo-element is hit-tested above in-flow neighbours, so wherever it spills it steals taps. Where controls sit closer than 44 apart, the hit area grows into the gap and stops at half of it. Known cases: the mindspace swatch row (28 px swatches) horizontally; `.cs-seg` (30 → 44 spills 7 px above and below its container, e.g. towards History's first row) and the switches (24 → 44 spills 10 px each way, towards a textarea or the next toggle row) vertically. This is **measured, not asserted**: the sweep script gains an overlap check (an `elementFromPoint` grid over each grown hit area, reporting any point that resolves to a different interactive element), and a non-empty report blocks the squash.
+   - **Switches:** besides the ring around the track, the switch's visible row label toggles it too (the `Switch` primitive renders the label as a `<label>` for the button), so the natural target is the whole labelled row, not just an invisible ring.
+   - **Breadcrumbs** also need width: `.cs-pagebar-crumb` has 2 px side padding and a 6 px gap, so a short crumb ("Aiko", 38 wide) gets side padding with a matching negative margin up to 44.
 2. **Controls that paint a box** (border or fill): `min-height: 2.75rem` (44 px), text stays centred.
    - **Standalone action buttons** grow visibly to 44: "Test & Save", "Test a model", "+ Add provider", "+ Add MCP server", "Change avatar", "Import a persona", Circle "New chat", "Consolidate now", "Save memory", the voice-settings toggle rows, the Treasury "Templates" row. They then match `cs-btn` (43 today; `cs-btn` gets `min-height: 2.75rem` too, a 1 px change).
    - **Compact controls inside dense rows** keep their visible size and take `.cs-hit` instead: segmented tabs (`.cs-seg`), the image-model chips, the mindspace texture pills, Treasury "Select" and "Filters", the switches.
@@ -181,7 +190,7 @@ Screens that need content the sweep could not create (a chat with replies, histo
 - The remaining one-offs (show-key eye, the two Tailwind-styled close × buttons in `AddProviderPicker` and `ModelPickerModal`, "Remove", "Use default", "Open server linking →", Treasury "Select") get `.cs-hit` or the `min-height` class in place.
 - **"Open server linking →"** sits directly under its provider row, so an invisible hit area would overlap the row's own button. It becomes a 44 px tall block with the text vertically centred: the sheet grows by about 27 px per blocked provider, the link looks the same.
 
-**Chat top bar and the microphone.** The papercut session works on the chat top bar's content and logic. This pass changes only hit areas there (`.cs-hit` on the Quick-menu brand, the hamburger, the avatar and the context gauge; the mic/send button from 40 to a 44 hit area, invisibly). These are class additions; if the papercut session's diff touches the same elements, I merge `master` in and keep both.
+**Chat top bar and the microphone.** The papercut session works on the chat top bar's content and logic. This pass changes only hit areas there (`.cs-hit` on the Quick-menu brand, the hamburger, the avatar and the context gauge). The mic/send button (`.dual-action-btn`) paints a box, so by the rule above it would grow visibly; it is a **deliberate exception**: kept at 40 visible with an invisible 44 hit area, so the composer's rhythm and the papercut session's area stay untouched (its 2 px spill fits the 4 px gap of the edit stack). These are class additions; if the papercut session's diff touches the same elements, I merge `master` in and keep both.
 
 **B3 — pinch-zoom.** `index.html` sets `maximum-scale=1`. The reason is documented in `src/index.css`: iOS Safari zooms in when a focused field's font is below 16 px, and the meta tag was added "as defence in depth" next to a rule that pins every `input`, `textarea` and `select` to 16 px below `lg`. The sweep confirms every field computes to 16 px at 380 px, so the rule does the job alone.
 
@@ -195,6 +204,7 @@ Screens that need content the sweep could not create (a chat with replies, histo
 - `.cockpit` and `.cockpit-unavailable`: bottom padding `calc(<current> + env(safe-area-inset-bottom, 0px))`.
 - `.voice-transport:has(~ .cockpit, ~ .cockpit-unavailable)`: bottom padding back to `0.6rem`, so the inset is added once, at the real bottom edge. `:has()` is in Safari 15.4+ and Chrome 105+; where it is missing the inset is doubled (cosmetic, never covering).
 - Live voice without the cockpit already ends with the live-voice bar; the build checks it carries the inset too.
+- **With the keyboard open.** Some iOS versions and standalone modes keep reporting a non-zero `safe-area-inset-bottom` while the software keyboard is up, which would put a ~34 px dead band between the composer and the keyboard. Step 17 checks this; if the band shows, the inset applies only while the visual viewport is not shrunk (a small `visualViewport` listener setting a class on the chat; the client does not track the keyboard today).
 
 ### Question for Chris (Part B)
 
@@ -207,9 +217,19 @@ Screens that need content the sweep could not create (a chat with replies, histo
 - **Laura**, spec-pass now; pre-squash pass on the built diff. Her spec-pass findings are worked in below.
 - **Larissa**: not required (no §9.1 paths). The one privacy-shaped decision, what the lock screen shows, is Q3 and the anti-goal above.
 
-## Laura's spec-pass
+## Laura's spec-pass (2026-11-18)
 
-*(Filled in after her pass.)*
+**Verdict: one hard defect, six soft findings; Part B had no hard defect.** All worked in:
+
+- **Hard — the bridge element could surface OS controls that disagree with the app** (during live voice, which shares the read-aloud sink, and after read-aloud ends, because a `MediaStream` keeps the element "playing"). Fixed: the route and the element's play state follow read-aloud's state; live voice uses the direct route; the element's own events feed back into the machine (A2, "`AudioSink` bridge"); new manual steps 12 and 14.
+- **Soft — a forgotten live-voice session keeps the screen lit with an open mic.** Taken as Q5 with her recommended ceiling.
+- **Soft — overlap was asserted, not measured.** The sweep gains an overlap check that blocks the squash; switch rows toggle from their label; breadcrumb width added (B design).
+- **Soft — one refused bridge disabled Media Session for the whole chat.** Now primed on the first gesture and retried on every read.
+- **Soft — taller sliders may change values while scrolling.** New check in step 15.
+- **Soft — keyboard open with the safe-area inset.** New check in step 17 and a fallback in B4.
+- **Soft — the mic/send button broke the spec's own technique rule.** Named as a deliberate exception.
+
+Her view on the questions: agrees with the recommendations for Q1–Q4; Q3 as a fixed default with no setting (the remaining exposure, a non-adult persona's name and avatar on the lock screen, is Chris's taste and privacy call). Q5 is hers.
 
 ## Left to the builder
 
@@ -235,10 +255,13 @@ Devices: **A** = a real Android phone with Chrome (browser tab and installed PWA
 9. **(D)** During read-aloud, use the keyboard's play/pause and next-track keys, and Chrome's media hub in the toolbar. *Pass:* they pause, resume and skip.
 10. **(A or I)** Read aloud with an adult persona and lock the phone. *Pass (with Q3 as recommended):* the lock screen shows "Chatsundere" and the app icon, not the persona's name or avatar.
 11. **(any)** On a browser without the APIs, or with wake lock refused (e.g. battery saver on Android): *Pass:* voice works as before, no error shown, no console error.
+12. **(A)** In live voice, while the persona speaks, press the headset button and pull down the notification shade. *Pass:* no media entry in the shade; the persona's speech is not silenced (a headset press may do nothing).
+13. **(A, I)** With Q5 as recommended: enter live voice, put the phone down in a quiet room for 6 minutes. *Pass:* after about 5 minutes the screen dims and locks on its normal timeout.
+14. **(A, I)** Turn on auto-read, send a message and let the reply be read aloud without touching a Read button, then lock the phone. *Pass:* the same lock-screen entry as in step 5 (or, on iOS, the same outcome as step 8): controls do not depend on whether the read was started by hand.
 
 **Part B — thumbs**
 
-12. **(A or I)** With one thumb, tap each control from the "Measured before" tables: the show-key eye, every sheet's ×, "Remove", "Open server linking →", "Select", the tabs in History and Treasury, "Test & Save", "Test a model", "+ Add provider", "+ Add MCP server", the ⋯ on Knowledge and My Circle, the switches, the breadcrumbs, the header chips. *Pass:* each hits on the first try, including taps slightly off the visible glyph, and never triggers the neighbouring control.
-13. **(A, I)** Pinch to zoom on the Entrance Hall, in a chat, and on an image in the lightbox. *Pass:* the page zooms and zooms back. Then tap into the composer and a Settings field. *Pass:* no automatic zoom on focus. Tap Skip several times fast. *Pass:* no double-tap zoom.
-14. **(I)** Open a chat with the cockpit open. *Pass:* the send row sits clearly above the home indicator. Start read-aloud so the voice bar shows above the cockpit. *Pass:* no extra gap between the voice bar and the cockpit, and the cockpit still clears the indicator.
-15. **(A, I)** Look at the screens touched (provider page, sheets, persona hub, Treasury, History, Settings, persona sub-pages). *Pass:* everything looks as before, except the standalone action buttons, now as tall as the other big buttons (per Q1).
+15. **(A or I)** With one thumb, tap each control from the "Measured before" tables: the show-key eye, every sheet's ×, "Remove", "Open server linking →", "Select", the tabs in History and Treasury, "Test & Save", "Test a model", "+ Add provider", "+ Add MCP server", the ⋯ on Knowledge and My Circle, the switches, the breadcrumbs, the header chips. *Pass:* each hits on the first try, including taps slightly off the visible glyph, and never triggers the neighbouring control. Then scroll Settings → Voice and the persona's Model behaviour page by dragging across the sliders. *Pass:* no value changes.
+16. **(A, I)** Pinch to zoom on the Entrance Hall, in a chat, and on an image in the lightbox. *Pass:* the page zooms and zooms back. Then tap into the composer and a Settings field. *Pass:* no automatic zoom on focus. Tap Skip several times fast. *Pass:* no double-tap zoom.
+17. **(I)** Open a chat with the cockpit open. *Pass:* the send row sits clearly above the home indicator. Start read-aloud so the voice bar shows above the cockpit. *Pass:* no extra gap between the voice bar and the cockpit, and the cockpit still clears the indicator. Tap into the composer. *Pass:* no extra gap between the composer and the keyboard.
+18. **(A, I)** Look at the screens touched (provider page, sheets, persona hub, Treasury, History, Settings, persona sub-pages). *Pass:* everything looks as before, except the standalone action buttons, now as tall as the other big buttons (per Q1).
