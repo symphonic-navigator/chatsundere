@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import 'fake-indexeddb/auto';
+import type { MasterKey } from '@chatsundere/crypto';
 import { type AppSession, useSessionStore } from '@chatsundere/ui-shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -296,7 +297,13 @@ describe('history-return', () => {
   });
 
   it('a sign-out (session to null) rotates the generation', () => {
-    useSessionStore.getState().setSession({ close: () => undefined } as unknown as AppSession);
+    // A session is never open without its master key (the store refuses it).
+    useSessionStore
+      .getState()
+      .setSession(
+        { close: () => undefined } as unknown as AppSession,
+        new Uint8Array(32) as unknown as MasterKey,
+      );
     const before = currentHistoryGen();
     useSessionStore.getState().closeAndForget();
     expect(currentHistoryGen()).not.toBe(before);
