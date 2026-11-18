@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { WireContentPart } from '@chatsundere/llm-unified';
+import { type WireContentPart, formatSentStamp } from '@chatsundere/llm-unified';
 import type { MessageRow, PersonaRow } from '../boot/client-data-db.js';
 
 /** When a user turn was sent: the instant and the sender's UTC offset then. */
@@ -45,4 +45,20 @@ export function prependStamp(
 ): string | WireContentPart[] {
   if (typeof content === 'string') return `${stamp}\n${content}`;
   return [{ type: 'text', text: stamp }, ...content];
+}
+
+/** Whether a stored row carries a `<sent>` stamp on the wire: only user turns
+ *  do, and seed body turns are a simulated conversation with no send time. */
+export function isStampedTurn(m: Pick<MessageRow, 'role' | 'kind'>): boolean {
+  return m.role === 'user' && m.kind !== 'seed';
+}
+
+/** The `<sent>` stamp a stored row carries on the wire, or undefined for a row
+ *  that carries none (see `isStampedTurn`). */
+export function userTurnStamp(
+  m: Pick<MessageRow, 'role' | 'kind' | 'createdAt' | 'utcOffsetMinutes'>,
+): string | undefined {
+  if (!isStampedTurn(m)) return undefined;
+  const at = sentAtOf(m);
+  return formatSentStamp(at.createdAt, at.utcOffsetMinutes);
 }

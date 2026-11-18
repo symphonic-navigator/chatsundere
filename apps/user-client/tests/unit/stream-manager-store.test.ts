@@ -2298,3 +2298,99 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(myChatId);
   });
 });
+
+describe('stream-manager.store — send times for the <sent> stamp', () => {
+  const realTz = process.env.TZ;
+  beforeEach(async () => {
+    await _resetClientDataDbForTests({ keepData: false });
+  });
+  afterEach(async () => {
+    process.env.TZ = realTz;
+    await _resetClientDataDbForTests({ keepData: false });
+    vi.restoreAllMocks();
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  function captureEngine(): Array<Record<string, unknown>> {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation((async (a: Record<string, unknown>) => {
+      calls.push(a);
+      return { finalContentBlocks: [], pillRows: [], finishReason: 'stop', usedTokens: 0 };
+    }) as never);
+    return calls;
+  }
+
+  it('start stores the device offset on the user row and hands the engine its send time', async () => {
+    process.env.TZ = 'Asia/Kathmandu';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const calls = captureEngine();
+    await useStreamManagerStore
+      .getState()
+      .start(baseStartArgs(chatId, persona, nanoGpt.offerings[0]) as never);
+    await new Promise((r) => setTimeout(r, 50));
+    const user = (await db.messages.where('chatId').equals(chatId).toArray()).find(
+      (m) => m.role === 'user',
+    );
+    expect(user?.utcOffsetMinutes).toBe(345);
+    expect(calls[0]?.userMessageAt).toEqual({ createdAt: user?.createdAt, utcOffsetMinutes: 345 });
+  });
+
+  it('regenerate replays the stored send time, not the clock or the current zone', async () => {
+    process.env.TZ = 'America/New_York';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    await db.messages.bulkAdd([
+      {
+        id: 'u1',
+        chatId,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'q' }],
+        createdAt: 1_000,
+        utcOffsetMinutes: 60,
+        updatedAt: 1_000,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+      {
+        id: 'pm1',
+        chatId,
+        role: 'persona',
+        contentBlocks: [{ type: 'text', text: 'old' }],
+        createdAt: 2_000,
+        updatedAt: 2_000,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ]);
+    const calls = captureEngine();
+    await useStreamManagerStore.getState().regenerate({
+      ...baseStartArgs(chatId, persona, nanoGpt.offerings[0]),
+      userMessageText: 'q',
+      targetMessageId: 'pm1',
+      userMessageId: 'u1',
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls[0]?.userMessageAt).toEqual({ createdAt: 1_000, utcOffsetMinutes: 60 });
+  });
+
+  it('the opener gets "now" and the device offset', async () => {
+    process.env.TZ = 'Europe/Berlin';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { openerPending: true });
+    const persona = await db.personas.get(personaId);
+    const calls = captureEngine();
+    const before = Date.now();
+    const base = baseStartArgs(chatId, persona, nanoGpt.offerings[0]);
+    await useStreamManagerStore
+      .getState()
+      .startOpener({ ...base, chat: { ...base.chat, openerPending: true } } as never);
+    await new Promise((r) => setTimeout(r, 50));
+    const at = calls[0]?.openerAt as { createdAt: number; utcOffsetMinutes: number };
+    expect(calls[0]?.job).toBe('greeting');
+    expect(at.createdAt).toBeGreaterThanOrEqual(before);
+    expect(at.utcOffsetMinutes).toBe(-new Date(at.createdAt).getTimezoneOffset());
+  });
+});

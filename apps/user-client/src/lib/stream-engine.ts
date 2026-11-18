@@ -1,5 +1,6 @@
 import {
   type Offering,
+  type PromptTimeInput,
   type ProviderConfig,
   type ProviderDefinition,
   type StreamChunk,
@@ -9,6 +10,7 @@ import {
   type WireMessage,
   buildPrompt,
   formatRetryEvent,
+  formatSentStamp,
   offeringToTarget,
   resolveModelInstructions,
   streamCompletion,
@@ -25,6 +27,12 @@ import type {
 import { flattenAnswerText, isContextMessage } from './content-blocks.js';
 import { resolveContextWindow, truncateToWindow, wireTokens } from './context-window.js';
 import { type ReasoningState, resolveReasoningBodyExtras } from './reasoning-resolver.js';
+import {
+  type SentAt,
+  prependStamp,
+  resolveTimeAwareness,
+  userTurnStamp,
+} from './time-awareness.js';
 import { type ReplayContext, replayHistory } from './tool-replay.js';
 
 export interface StartStreamArgs {
@@ -62,6 +70,13 @@ export interface StartStreamArgs {
   /** Prompt job — 'greeting' builds the opener prompt (Band 1 + About Me, no
    *  lore/knowledge/tools). Default 'chat'. */
   job?: 'chat' | 'greeting';
+  /** When the active user turn was sent, from its stored row: its stamp is
+   *  rendered from this, never from the clock, so a regenerate or edit-replace
+   *  sends the same bytes. Absent ⇒ the active turn carries no stamp (a seed
+   *  body turn, or a job with no real user turn). */
+  userMessageAt?: SentAt;
+  /** "Now" for the opener (greeting job), when the persona knows the time. */
+  openerAt?: SentAt;
   signal: AbortSignal;
   onChunk: (chunk: StreamChunk) => void;
   /** Optional diagnostic capture sink, forwarded to the streaming transport. */
@@ -96,6 +111,8 @@ export function resolveOpenerContext(
  * responsible for persistence.
  */
 export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngineResult> {
+  const job = args.job ?? 'chat';
+  const timeOn = resolveTimeAwareness(args.persona);
   const aboutMe = args.persona.aboutMeOverride?.trim()
     ? args.persona.aboutMeOverride
     : args.globalAboutMe;
@@ -116,9 +133,10 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
       roleplayEnabled: args.persona.roleplay,
       narration: args.persona.narration,
       personaName: args.persona.name,
-      openerContext: resolveOpenerContext(args.priorMessages, args.job ?? 'chat'),
+      openerContext: resolveOpenerContext(args.priorMessages, job),
+      time: timeOn ? promptTimeInput(job, args) : undefined,
     },
-    args.job ?? 'chat',
+    job,
   );
 
   const wireMessages = buildEngineWireMessages(
@@ -127,6 +145,7 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
     args.userMessageText,
     args.toolExchange ?? [],
     args.replay,
+    timeOn && job === 'chat' ? { activeTurn: args.userMessageAt } : undefined,
   );
 
   const budget = resolveContextWindow(args.persona, args.offering);
@@ -214,6 +233,22 @@ export async function runStreamEngine(args: StartStreamArgs): Promise<StreamEngi
   return { finalContentBlocks: contentBuffer, pillRows, finishReason, usedTokens };
 }
 
+/** The time segment's inputs for a persona whose switch is on. */
+function promptTimeInput(
+  job: 'chat' | 'greeting',
+  args: Pick<StartStreamArgs, 'openerAt' | 'persona'>,
+): PromptTimeInput | undefined {
+  if (job === 'chat') return { mode: 'chat' };
+  if (!args.openerAt) return undefined;
+  const last = args.persona.lastInteractionAt;
+  return {
+    mode: 'greeting',
+    now: args.openerAt.createdAt,
+    utcOffsetMinutes: args.openerAt.utcOffsetMinutes,
+    ...(last !== undefined ? { lastInteractionAt: last } : {}),
+  };
+}
+
 /** Below this many billed reasoning tokens, a hidden-reasoning turn plants no
  *  marker — a trivial "hi" (~24 tokens) would otherwise clutter the chat surface
  *  every turn, since the toggle defaults on. Tunable; see the 2026-07-16 spec. */
@@ -239,12 +274,21 @@ function appendReasoning(buf: ContentBlock[], text: string): void {
   }
 }
 
+/** Time stamping for one wire build. Present only when the persona knows the
+ *  time: prior user rows are stamped from their own stored fields, the active
+ *  turn from `activeTurn` (unstamped when absent). */
+export interface WireStamping {
+  activeTurn?: SentAt;
+}
+
 /**
  * Assemble the wire message list for one engine pass: system prompt, replayed
  * history, the active user turn, then any accumulated tool exchange from prior
  * loop rounds. Prior persona turns replay their recorded tool rounds as
  * assistant(tool_calls) + tool messages when a replay context is given (see
  * `tool-replay.ts`), and prior user turns carry their resolved attachments.
+ * With `stamp`, every real user turn leads with its `<sent>` stamp; nothing
+ * else changes, so earlier turns stay byte-identical from one turn to the next.
  *
  * `userContent` accepts a plain string for text-only turns or a
  * `WireContentPart[]` for multimodal turns (text + images).
@@ -255,11 +299,22 @@ export function buildEngineWireMessages(
   userContent: string | WireContentPart[],
   toolExchange: WireMessage[],
   replay?: ReplayContext,
+  stamp?: WireStamping,
 ): WireMessage[] {
+  const active = stamp?.activeTurn;
   return [
     { role: 'system', content: systemPrompt },
-    ...replayHistory(priorMessages.filter(isContextMessage), replay),
-    { role: 'user', content: userContent },
+    ...replayHistory(
+      priorMessages.filter(isContextMessage),
+      replay,
+      stamp ? userTurnStamp : undefined,
+    ),
+    {
+      role: 'user',
+      content: active
+        ? prependStamp(userContent, formatSentStamp(active.createdAt, active.utcOffsetMinutes))
+        : userContent,
+    },
     ...toolExchange,
   ];
 }

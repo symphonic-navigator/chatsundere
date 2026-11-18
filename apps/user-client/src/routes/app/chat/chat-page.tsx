@@ -58,6 +58,7 @@ import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
 import { scrollToMessage } from '../../../lib/scroll-to-message.js';
 import { materialiseSeed } from '../../../lib/seed-materialise.js';
+import { resolveTimeAwareness } from '../../../lib/time-awareness.js';
 import { contextUtilisation, estimateTokens } from '../../../lib/token-estimator.js';
 import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
@@ -422,6 +423,7 @@ export function ChatPage(): JSX.Element {
       return { usedTokens: 0, systemTokens: 0 };
     // Guard against personas with empty instructions — buildPrompt throws on empty.
     if (!effectivePersona.instructions.trim()) return { usedTokens: 0, systemTokens: 0 };
+    const stamped = resolveTimeAwareness(effectivePersona);
     const sys = buildPrompt(
       {
         tonalityEnabled: effectivePersona.chatsundereTonality,
@@ -440,6 +442,7 @@ export function ChatPage(): JSX.Element {
         modelInstructions: resolveModelInstructions(offering),
         // Mirror the real send so the context gauge counts the same prompt.
         screenEffectsEnabled: settingsQuery.data.screenEffectsEnabled ?? true,
+        time: stamped ? { mode: 'chat' } : undefined,
       },
       'chat',
     );
@@ -449,7 +452,7 @@ export function ChatPage(): JSX.Element {
     const pillsById = new Map((chatQuery.data?.pills ?? []).map((p) => [p.id, p]));
     const historyTokens = (chatQuery.data?.messages ?? [])
       .filter(isContextMessage)
-      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments), 0);
+      .reduce((s, m) => s + estimateReplayTokens(m, pillsById, replayAttachments, stamped), 0);
     const systemTokens = estimateTokens(sys);
     return { usedTokens: systemTokens + historyTokens, systemTokens };
   }, [

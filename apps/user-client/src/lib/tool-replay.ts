@@ -5,6 +5,7 @@ import type { AttachmentRow, MessageRow, PillRow } from '../boot/client-data-db.
 import { BUILTIN_TOOL_NAMES } from '../tools/builtin-tool-names.js';
 import { flattenAnswerText } from './content-blocks.js';
 import { wireTokens } from './context-window.js';
+import { prependStamp, userTurnStamp } from './time-awareness.js';
 import { estimateTokens } from './token-estimator.js';
 
 /** Upper bound on one replayed tool result; the head is kept (spec §4). */
@@ -271,15 +272,25 @@ function replayPersona(
  * Replay prior context messages for the wire. Persona messages with recorded
  * tool rounds expand into assistant(tool_calls) + tool messages (spec §3);
  * user turns with resolved attachments carry that content; everything else
- * maps 1:1 as before. Without a context, text only.
+ * maps 1:1 as before. Without a context, text only. `stampOf` returns the
+ * `<sent>` stamp for a row, or undefined; a stamp only ever lands on a user
+ * turn, which always maps to exactly one wire message.
  */
-export function replayHistory(rows: MessageRow[], ctx: ReplayContext | undefined): WireMessage[] {
-  if (!ctx) return rows.map(textOnlyWireMessage);
-  const mint = createIdMinter();
+export function replayHistory(
+  rows: MessageRow[],
+  ctx: ReplayContext | undefined,
+  stampOf?: (row: MessageRow) => string | undefined,
+): WireMessage[] {
+  const mint = ctx ? createIdMinter() : undefined;
   return rows.flatMap((r): WireMessage[] => {
-    if (r.role === 'persona') return replayPersona(r, ctx, mint, true);
-    const content = r.role === 'user' ? ctx.userContentById?.get(r.id) : undefined;
-    return [content === undefined ? textOnlyWireMessage(r) : { role: 'user', content }];
+    if (r.role === 'persona') {
+      return ctx && mint ? replayPersona(r, ctx, mint, true) : [textOnlyWireMessage(r)];
+    }
+    const content = r.role === 'user' ? ctx?.userContentById?.get(r.id) : undefined;
+    const msg: WireMessage =
+      content === undefined ? textOnlyWireMessage(r) : { role: 'user', content };
+    const stamp = r.role === 'user' ? stampOf?.(r) : undefined;
+    return [stamp === undefined ? msg : { ...msg, content: prependStamp(msg.content, stamp) }];
   });
 }
 
@@ -289,11 +300,23 @@ export function estimateReplayTokens(
   row: MessageRow,
   pillsById: ReadonlyMap<string, PillRow>,
   attachmentsByMessage?: ReadonlyMap<string, readonly AttachmentRow[]>,
+  stamped = false,
 ): number {
   if (row.role !== 'persona') {
-    const text = estimateTokens(flattenAnswerText(row.contentBlocks));
-    if (row.role !== 'user') return text;
-    return text + estimateAttachmentTokens(attachmentsByMessage?.get(row.id) ?? []);
+    const flat = flattenAnswerText(row.contentBlocks);
+    if (row.role !== 'user') return estimateTokens(flat);
+    const attachments = attachmentsByMessage?.get(row.id) ?? [];
+    const stamp = stamped ? userTurnStamp(row) : undefined;
+    // Mirror prependStamp: a text-only turn carries the stamp in the same
+    // string, a turn with attachments as its own leading part.
+    let text = estimateTokens(flat);
+    if (stamp !== undefined) {
+      text =
+        attachments.length === 0
+          ? estimateTokens(`${stamp}\n${flat}`)
+          : text + estimateTokens(stamp);
+    }
+    return text + estimateAttachmentTokens(attachments);
   }
   return replayPersona(
     row,

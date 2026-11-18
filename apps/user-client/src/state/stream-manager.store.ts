@@ -4,7 +4,9 @@ import {
   ProxyUnavailableError,
   type ReasoningIntent,
   type StreamChunk,
+  TIME_STAMP_INSTRUCTION,
   type WireContentPart,
+  formatSentStamp,
   getCanonical,
   getOffering,
   getProvider,
@@ -65,7 +67,12 @@ import { queryClient } from '../lib/queryClient.js';
 import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
 import { openSecret } from '../lib/secrets.js';
 import { type StartStreamArgs, runStreamEngine } from '../lib/stream-engine.js';
-import { deviceOffsetMinutes } from '../lib/time-awareness.js';
+import {
+  deviceOffsetMinutes,
+  isStampedTurn,
+  resolveTimeAwareness,
+  sentAtOf,
+} from '../lib/time-awareness.js';
 import { generateTitleAsync } from '../lib/title-generator.js';
 import { contextUtilisation, estimateTokens } from '../lib/token-estimator.js';
 import { MAX_TOOL_ROUNDS, TOOL_ROUND_LIMIT_NUDGE, runToolLoop } from '../lib/tool-loop.js';
@@ -410,14 +417,23 @@ export const useStreamManagerStore = create<StreamManagerStore>((set, get) => ({
     const projectedAttachments = await loadReplayAttachments(
       projected.priorMessages.map((m) => m.id),
     );
+    // With time on, every user turn carries its stamp and the prompt the time
+    // segment, so the failsafe counts what the wire will send.
+    const stamped = resolveTimeAwareness(args.persona);
+    const sendAt = Date.now();
     const projectedUsed =
       projected.priorMessages.reduce(
-        (sum, m) => sum + estimateReplayTokens(m, projectedPills, projectedAttachments),
+        (sum, m) => sum + estimateReplayTokens(m, projectedPills, projectedAttachments, stamped),
         0,
       ) +
       estimateAttachmentTokens(await listPendingAttachments(args.chat.id)) +
       estimateTokens(projected.memoryContext) +
-      estimateTokens(args.userText);
+      estimateTokens(
+        stamped
+          ? `${formatSentStamp(sendAt, deviceOffsetMinutes(sendAt))}\n${args.userText}`
+          : args.userText,
+      ) +
+      (stamped ? estimateTokens(TIME_STAMP_INSTRUCTION) : 0);
     if (wouldOverflow(projectedUsed, contextWindow)) {
       // Only block-compact if the background valve isn't already compacting this
       // chat. If it is, let it finish — truncateToWindow remains the hard backstop
@@ -931,6 +947,11 @@ async function runIntoDraft(
     },
   };
   let userMessageText = args.userMessageText;
+  // The active turn's stamp comes from its stored row, so a regenerate or an
+  // edit-replace re-sends the original send time, byte for byte (spec A1).
+  const userRow = userMessageId ? await db.messages.get(userMessageId) : undefined;
+  const userMessageAt =
+    args.userMessageAt ?? (userRow && isStampedTurn(userRow) ? sentAtOf(userRow) : undefined);
   if (userMessageId) {
     userMessageText = await resolveUserContent(
       args,
@@ -1068,6 +1089,7 @@ async function runIntoDraft(
         ...args,
         priorMessages: compacted.priorMessages,
         userMessageText,
+        userMessageAt,
         toolsInstruction,
         knowledgeLibrariesContext,
         memoryContext: compacted.memoryContext,
@@ -1364,6 +1386,7 @@ async function runOpenerStream(
     globalAboutMe: args.globalAboutMe,
     screenEffectsEnabled: args.screenEffectsEnabled,
     job: 'greeting',
+    openerAt: { createdAt: now, utcOffsetMinutes: deviceOffsetMinutes(now) },
     signal: controller.signal,
     onChunk,
   });
