@@ -82,7 +82,11 @@ describe('ArtefactsPage', () => {
   it('shows the empty state when there are no artefacts', () => {
     mockRows = [];
     renderPage();
-    expect(screen.getByText('Artefacts you create appear here.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Nothing here yet. Ask Aurum for a document, a page or a small app, or keep a reply with ◆ Save.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('renders the ★ Favourites section when a favourite is present', () => {

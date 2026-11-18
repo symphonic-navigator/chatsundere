@@ -3,7 +3,7 @@
 import { getLinkedAccount } from '@chatsundere/crypto';
 import { useAccountLinkStore } from '@chatsundere/ui-shared';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getDb } from '../../../boot/open-db.js';
 import { SyncQuotaLine } from '../../../components/SyncQuotaLine.js';
 import { SyncStatusLine } from '../../../components/SyncStatusLine.js';
@@ -14,6 +14,7 @@ import { useHelp } from '../../../content/help/use-help.js';
 import { logoutCurrentSession } from '../../../lib/auth-logout.js';
 import { copy } from '../../../lib/copy.js';
 import { decoupleDevice } from '../../../lib/decouple-device.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { AddDeviceSection } from './add-device-section.js';
 
 const ROLE_LABELS: Record<'primary_admin' | 'admin' | 'user', string> = {
@@ -38,6 +39,8 @@ const LINKED_SINCE_FORMAT = new Intl.DateTimeFormat('en-GB', {
 export function ServerLinkingPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('server-linking');
   const navigate = useNavigate();
+  const location = useLocation();
+  const [search] = useSearchParams();
 
   const linkStatus = useAccountLinkStore((s) => s.linkStatus);
   const baseUrl = useAccountLinkStore((s) => s.baseUrl);
@@ -98,7 +101,7 @@ export function ServerLinkingPage(): JSX.Element {
 
   return (
     <PageScaffold
-      back="/app/account"
+      back={safeReturnPath(search.get('return'), '/app/account')}
       crumbs={[{ label: 'My Account', to: '/app/account' }, { label: 'Server linking' }]}
       onHelp={onHelp}
     >
@@ -148,7 +151,13 @@ export function ServerLinkingPage(): JSX.Element {
 
             <Button
               tone="primary"
-              onClick={() => navigate('/onboarding/invitation?return=/app/account/server-linking')}
+              onClick={() =>
+                navigate(
+                  `/onboarding/invitation?return=${encodeURIComponent(
+                    `${location.pathname}${location.search}`,
+                  )}`,
+                )
+              }
             >
               {copy.serverLinking.linkCta}
             </Button>

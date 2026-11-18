@@ -41,11 +41,12 @@ describe('ChatQuickMenu', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('lists the eight entries in order', () => {
+  it('lists the ten entries in order', () => {
     setup();
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim());
     expect(labels).toEqual([
       'Entrance Hall',
+      'My Circle',
       'FFable',
       'New chat with Fable',
       'Memories',
@@ -53,6 +54,7 @@ describe('ChatQuickMenu', () => {
       'Knowledge',
       'Export chat',
       'Image settings',
+      'Voice settings',
     ]);
   });
 
@@ -76,6 +78,8 @@ describe('ChatQuickMenu', () => {
     ['History', `/app/history?personaId=p1&return=${enc('/app/chat/c1')}`],
     ['Knowledge', `/app/persona/p1/knowledge?return=${enc('/app/chat/c1')}`],
     ['Image settings', `/app/settings/images?return=${enc('/app/chat/c1')}`],
+    ['My Circle', `/app/circle?return=${enc('/app/chat/c1')}`],
+    ['Voice settings', `/app/settings/voice?return=${enc('/app/chat/c1')}`],
   ])('%s navigates to %s and closes', (name, to) => {
     const p = setup();
     fireEvent.click(item(name));
@@ -104,6 +108,7 @@ describe('ChatQuickMenu', () => {
     expect(item('New chat')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getAllByRole('menuitem').map((el) => el.textContent?.trim())).toEqual([
       'Entrance Hall',
+      'My Circle',
       'PersonaLoading persona…',
       'New chat',
       'Memories',
@@ -111,10 +116,14 @@ describe('ChatQuickMenu', () => {
       'Knowledge',
       'Export chat',
       'Image settings',
+      'Voice settings',
     ]);
     fireEvent.click(item('New chat'));
     expect(item('Entrance Hall')).not.toHaveAttribute('aria-disabled');
     expect(item('Image settings')).not.toHaveAttribute('aria-disabled');
+    // Persona-independent entries stay usable while the persona resolves.
+    expect(item('My Circle')).not.toHaveAttribute('aria-disabled');
+    expect(item('Voice settings')).not.toHaveAttribute('aria-disabled');
     fireEvent.click(item('Memories'));
     expect(p.onNavigate).not.toHaveBeenCalled();
   });
@@ -138,11 +147,11 @@ describe('ChatQuickMenu', () => {
   it('ArrowDown and ArrowUp move focus over enabled items, wrapping', () => {
     setup();
     fireEvent.keyDown(item('Entrance Hall'), { key: 'ArrowDown' });
-    expect(item(/^(F\s?)?Fable$/)).toHaveFocus();
-    fireEvent.keyDown(item(/^(F\s?)?Fable$/), { key: 'ArrowUp' });
+    expect(item('My Circle')).toHaveFocus();
+    fireEvent.keyDown(item('My Circle'), { key: 'ArrowUp' });
     expect(item('Entrance Hall')).toHaveFocus();
     fireEvent.keyDown(item('Entrance Hall'), { key: 'ArrowUp' });
-    expect(item('Image settings')).toHaveFocus();
+    expect(item('Voice settings')).toHaveFocus();
   });
 
   it('the portal root carries the cockpit-exemption class', () => {

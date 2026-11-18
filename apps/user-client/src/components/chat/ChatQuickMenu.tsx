@@ -177,6 +177,12 @@ export function ChatQuickMenu(p: ChatQuickMenuProps): JSX.Element | null {
           p.onEntranceHall();
         },
       },
+      {
+        key: 'circle',
+        label: 'My Circle',
+        disabled: false,
+        run: go(`/app/circle?return=${enc}`),
+      },
     ],
     personaEntries,
     [
@@ -197,6 +203,12 @@ export function ChatQuickMenu(p: ChatQuickMenuProps): JSX.Element | null {
         label: 'Image settings',
         disabled: false,
         run: go(`/app/settings/images?return=${enc}`),
+      },
+      {
+        key: 'voice',
+        label: 'Voice settings',
+        disabled: false,
+        run: go(`/app/settings/voice?return=${enc}`),
       },
     ],
   ];

@@ -17,9 +17,12 @@ vi.mock('@chatsundere/ui-shared', () => ({
 
 import { ServerRelayStatus } from '../../src/components/ServerRelayStatus.js';
 
+const HERE = '/app/settings/providers?return=/app';
+const LINKING = `/app/account/server-linking?return=${encodeURIComponent(HERE)}`;
+
 function renderStatus() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[HERE]}>
       <ServerRelayStatus />
     </MemoryRouter>,
   );
@@ -39,12 +42,12 @@ describe('ServerRelayStatus', () => {
     expect(screen.queryByText(/cors proxy/i)).not.toBeInTheDocument();
   });
 
-  it('shows the gate tooltip and a server-linking link when local-only', () => {
+  it('shows the gate tooltip and a server-linking link (returning here) when local-only', () => {
     gate = { enabled: false, reason: 'local-only', tooltip: 'Link a server to relay providers.' };
     renderStatus();
     expect(screen.getByText(/link a server to relay providers/i)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /open server linking/i });
-    expect(link.getAttribute('href')).toBe('/app/account/server-linking');
+    expect(link.getAttribute('href')).toBe(LINKING);
     expect(screen.queryByText(/cors proxy/i)).not.toBeInTheDocument();
   });
 
@@ -56,7 +59,7 @@ describe('ServerRelayStatus', () => {
     };
     renderStatus();
     const link = screen.getByRole('link', { name: /open server linking/i });
-    expect(link.getAttribute('href')).toBe('/app/account/server-linking');
+    expect(link.getAttribute('href')).toBe(LINKING);
   });
 
   it('shows the tooltip without a linking link when offline (no useful destination)', () => {

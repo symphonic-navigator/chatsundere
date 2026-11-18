@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MasterKey } from '@chatsundere/crypto';
 import { type AppSession, useSessionStore } from '@chatsundere/ui-shared';
-import { sweepOrphanRevisions } from '../projects/revisions.js';
+import { purgeExpiredTrash } from '../trash/purge.js';
 import { enforceClientDataIdentity } from './client-data-identity.js';
 
 /**
@@ -30,6 +30,9 @@ import { enforceClientDataIdentity } from './client-data-identity.js';
 export async function activateSession(session: AppSession, mk?: MasterKey): Promise<void> {
   await enforceClientDataIdentity(session);
   useSessionStore.getState().setSession(session, mk);
-  // Housekeeping only: it must never delay or fail an unlock.
-  void sweepOrphanRevisions().catch(() => {});
+  // Housekeeping only: it must never delay or fail an unlock. Runs for every
+  // account, so local-only users get their expired trash purged without sync.
+  void purgeExpiredTrash().catch((e: unknown) => {
+    console.warn('Could not purge expired trash on unlock', e);
+  });
 }

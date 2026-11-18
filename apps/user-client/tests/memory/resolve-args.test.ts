@@ -19,13 +19,15 @@ vi.mock('@chatsundere/llm-unified', () => ({
   getProvider: (...a: unknown[]) => getProvider(...a),
   getOffering: (...a: unknown[]) => getOffering(...a),
 }));
-vi.mock('../../src/lib/secrets.js', () => ({ openSecret: vi.fn(async () => 'sk-test') }));
+const openSecret = vi.fn(async (..._a: unknown[]) => 'sk-test');
+vi.mock('../../src/lib/secrets.js', () => ({ openSecret: (...a: unknown[]) => openSecret(...a) }));
 vi.mock('../../src/data/providers.js', () => ({ providerApiKeySlot: () => 'slot' }));
 const resolveBackgroundBundle = vi.fn();
 vi.mock('../../src/data/resolve-background-offering.js', () => ({
   resolveBackgroundBundle: (...a: unknown[]) => resolveBackgroundBundle(...a),
 }));
 
+import { MasterKeyUnavailableError, ProviderKeyLockedError } from '../../src/data/send-errors.js';
 import { resolveMemoryConsolidationArgs } from '../../src/memory/resolve-args.js';
 
 afterEach(() => vi.clearAllMocks());
@@ -33,9 +35,28 @@ afterEach(() => vi.clearAllMocks());
 describe('resolveMemoryConsolidationArgs', () => {
   it('throws when the master key is unavailable', async () => {
     getState.mockReturnValue({ mk: null });
-    await expect(resolveMemoryConsolidationArgs('p1', 'memory-consolidate')).rejects.toThrow(
-      /master key/,
+    await expect(resolveMemoryConsolidationArgs('p1', 'memory-consolidate')).rejects.toBeInstanceOf(
+      MasterKeyUnavailableError,
     );
+  });
+
+  it('throws ProviderKeyLockedError (id and name only) when the key cannot be opened', async () => {
+    getState.mockReturnValue({ mk: {} });
+    personasGet.mockResolvedValue({ id: 'p1', providerId: 'pr1', modelId: 'm1' });
+    providersGet.mockResolvedValue({ id: 'pr1', templateId: 'nano-gpt', apiKey: {} });
+    getProvider.mockReturnValue({ displayName: 'NanoGPT', baseUrl: 'https://x', corsHint: 'none' });
+    getOffering.mockReturnValue({ id: 'm1' });
+    openSecret.mockRejectedValueOnce(
+      Object.assign(new Error('secret internals'), { name: 'OperationError' }),
+    );
+    const err = await resolveMemoryConsolidationArgs('p1', 'memory-consolidate').catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ProviderKeyLockedError);
+    expect(err).toMatchObject({ templateId: 'nano-gpt', providerName: 'NanoGPT' });
+    expect((err as Error).message).not.toContain('secret internals');
+    expect((err as Error).cause).toBeUndefined();
+    expect(resolveBackgroundBundle).not.toHaveBeenCalled();
   });
 
   it('throws when the persona does not exist', async () => {

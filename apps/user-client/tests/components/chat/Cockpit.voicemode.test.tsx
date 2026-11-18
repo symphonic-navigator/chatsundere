@@ -207,14 +207,21 @@ describe('cockpit voices-unavailable retry', () => {
     expect(getByText(COPY)).toBeTruthy();
   });
 
-  it('other reasons keep Live voice disabled and do not recheck', () => {
+  it('other reasons keep Live voice aria-disabled: a tap shows the note, never rechecks or starts', () => {
     const onRecheckVoice = vi.fn(async () => {});
-    const { getByLabelText } = renderCockpit({
+    const onEnterLiveVoice = vi.fn();
+    const { getByLabelText, getByText } = renderCockpit({
       voiceUnavailable: 'no-provider' as const,
       onRecheckVoice,
+      onEnterLiveVoice,
     });
     const live = getByLabelText('Live voice mode');
-    expect(live).toBeDisabled();
+    expect(live).not.toBeDisabled();
+    expect(live).toHaveAttribute('aria-disabled', 'true');
     expect(live).toHaveAttribute('title', 'No voice provider — set one in Settings → Voice');
+    fireEvent.click(live);
+    expect(onRecheckVoice).not.toHaveBeenCalled();
+    expect(onEnterLiveVoice).not.toHaveBeenCalled();
+    expect(getByText(/set up a voice provider/i)).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { aggregateServiceKinds, getOffering } from '@chatsundere/llm-unified';
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ModelSlotPicker } from '../../../components/ModelSlotPicker.js';
 import { WebPickerOverlay, type WebPickerValue } from '../../../components/WebPickerOverlay.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
@@ -9,6 +10,7 @@ import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { pickExpertSearchRef } from '../../../lib/resolve-expert-web.js';
+import { safeReturnPath } from '../../../lib/safe-return.js';
 import { useServerGate } from '../../../lib/server-gate.js';
 import { usableTemplateIds, useUsableTemplateIds } from '../../../lib/usable-providers.js';
 import { webBackendOptions } from '../../../lib/web-backend-options.js';
@@ -27,6 +29,7 @@ function parseModelRef(
 /** My Settings › "Ask an Expert" — expert-model slot and expert-web picker. */
 export function SettingsExpertPage(): JSX.Element {
   const { onHelp, helpOverlay } = useHelp('settings-expert');
+  const [search] = useSearchParams();
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
   const { data: providerRows } = useProviders();
@@ -106,7 +109,7 @@ export function SettingsExpertPage(): JSX.Element {
   return (
     <PageScaffold
       crumbs={[{ label: 'My Settings', to: '/app/settings' }, { label: '"Ask an Expert"' }]}
-      back="/app/settings"
+      back={safeReturnPath(search.get('return'), '/app/settings')}
       onHelp={onHelp}
     >
       {helpOverlay}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Brain } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { MemoryResponseOverlay } from '../../components/MemoryResponseOverlay.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
@@ -19,6 +19,12 @@ import {
   useUnextractedCount,
   useUpdateEntry,
 } from '../../data/memory.js';
+import {
+  PASSPHRASE_SENTENCE,
+  keyLockedSentence,
+  passphraseLoginPath,
+  reEnterKeyPath,
+} from '../../data/send-errors.js';
 import { safeReturnPath } from '../../lib/safe-return.js';
 import type { MemoryActionState } from '../../lib/use-memory-actions.js';
 import { useMemoryActions } from '../../lib/use-memory-actions.js';
@@ -28,8 +34,8 @@ import { toastStore } from '../../state/toast.store.js';
 import { useClass2Gate } from '../../sync/gate.js';
 import { usePersonaEditing } from './persona/use-persona-editing.js';
 
-const ERROR_COPY: Record<MemoryActionError, string> = {
-  'no-credentials': 'Credentials unavailable — re-authenticate, then retry.',
+const ERROR_COPY: Record<Exclude<MemoryActionError, 'key-locked'>, string> = {
+  'no-credentials': PASSPHRASE_SENTENCE,
   timeout:
     'The model took too long to answer. Nothing was lost — it may be busy; try again in a little while.',
   'upstream-busy':
@@ -43,9 +49,43 @@ const ERROR_COPY: Record<MemoryActionError, string> = {
  *  precedence over the code-specific message once at least one slice was
  *  checkpointed, unless the failure was credentials (nothing to retry-into). */
 function memoryErrorCopy(state: MemoryActionState): string {
-  if ((state.partialSlices ?? 0) > 0 && state.error !== 'no-credentials')
+  const error = state.error ?? 'failed';
+  if (error === 'key-locked')
+    return keyLockedSentence(state.lockedKey?.providerName ?? 'this provider', 'memory');
+  if ((state.partialSlices ?? 0) > 0 && error !== 'no-credentials')
     return 'Consolidated some of them — the rest are still below. Try again to finish.';
-  return ERROR_COPY[state.error ?? 'failed'];
+  return ERROR_COPY[error];
+}
+
+/** One action's error line: its copy, Retry where retrying can help, and the way
+ *  out for a missing passphrase or a key that can't be opened. Both repair trips
+ *  carry this page (with its own query) as `?return=`. */
+function MemoryActionErrorLine(p: { state: MemoryActionState; onRetry: () => void }): JSX.Element {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const here = `${location.pathname}${location.search}`;
+  const locked = p.state.error === 'key-locked' ? p.state.lockedKey : undefined;
+  return (
+    <div className="memory-page-action-error" role="alert">
+      <span>{memoryErrorCopy(p.state)}</span>
+      {/* The repair leads: a Retry without the passphrase can only fail again. */}
+      {p.state.error === 'no-credentials' ? (
+        <button type="button" onClick={() => navigate(passphraseLoginPath(here))}>
+          Enter passphrase
+        </button>
+      ) : null}
+      {p.state.error === 'key-locked' ? null : (
+        <button type="button" onClick={p.onRetry}>
+          Retry
+        </button>
+      )}
+      {locked ? (
+        <button type="button" onClick={() => navigate(reEnterKeyPath(locked.templateId, here))}>
+          Re-enter key
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 /** The single home for a persona's memory: review/triage journal entries and
@@ -341,12 +381,7 @@ export function PersonaMemory(): JSX.Element {
                   const response = learnState.response;
                   return (
                     <>
-                      <div className="memory-page-action-error" role="alert">
-                        <span>{memoryErrorCopy(learnState)}</span>
-                        <button type="button" onClick={() => void learnNow()}>
-                          Retry
-                        </button>
-                      </div>
+                      <MemoryActionErrorLine state={learnState} onRetry={() => void learnNow()} />
                       {response ? (
                         <button
                           type="button"
@@ -416,12 +451,10 @@ export function PersonaMemory(): JSX.Element {
                   const response = consolidateState.response;
                   return (
                     <>
-                      <div className="memory-page-action-error" role="alert">
-                        <span>{memoryErrorCopy(consolidateState)}</span>
-                        <button type="button" onClick={() => void consolidateNow()}>
-                          Retry
-                        </button>
-                      </div>
+                      <MemoryActionErrorLine
+                        state={consolidateState}
+                        onRetry={() => void consolidateNow()}
+                      />
                       {response ? (
                         <button
                           type="button"
