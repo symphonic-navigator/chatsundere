@@ -461,6 +461,7 @@ export function MessageBlock(p: MessageBlockProps): JSX.Element {
             p.mindspace,
             glowByBlockIndex,
             p.message.id,
+            p.message.chatId,
             p.monologue ?? null,
           )}
           {split && split.tailText.length > 0 ? (
@@ -539,6 +540,7 @@ function renderBlocks(
   // across segment-advance renders so MarkdownContent never re-parses.
   glowByBlockIndex: Map<number, VoiceGlow>,
   messageId: string,
+  chatId: string,
   monologue: MonologueController | null,
 ): (JSX.Element | null)[] {
   // Partition into ordered runs of same-type blocks — one component per run.
@@ -645,7 +647,14 @@ function renderBlocks(
     // 'pill' — single-block group (pills never coalesce; one PillRow per group).
     const pillBlock = group.blocks[0] as { type: 'pill'; pillId: string };
     const pill = pills.get(pillBlock.pillId);
-    return pill ? <Pill key={`p-${pillBlock.pillId}`} row={pill} /> : null;
+    return pill ? (
+      <Pill
+        key={`p-${pillBlock.pillId}`}
+        row={pill}
+        chatId={chatId}
+        personaId={persona?.id ?? null}
+      />
+    ) : null;
   });
 }
 

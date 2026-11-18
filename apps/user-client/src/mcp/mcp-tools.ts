@@ -3,6 +3,7 @@ import type { Tool, ToolProgress, ToolResult } from '../tools/types.js';
 import { type McpCallResult, mcpToolsCall } from './mcp-client.js';
 import type { EnsureResult } from './oauth/ensure-token.js';
 import { canonicalResource } from './oauth/url.js';
+import { mcpRedirectToolError } from './redirect-copy.js';
 import { buildMcpToolNames } from './tool-naming.js';
 import type {
   McpAuthResolved,
@@ -54,6 +55,12 @@ export interface McpAuthNotice {
   scope?: string;
 }
 
+/** The chat notice a call whose server answered with a redirect carries; names only. */
+export interface McpRedirectNotice {
+  serverId: string;
+  serverName: string;
+}
+
 /** Per-send MCP context: the active servers plus the key opener and approval hook. */
 export interface McpToolContext {
   servers: McpActiveServer[];
@@ -88,8 +95,8 @@ export interface McpToolContext {
     signal?: AbortSignal,
   ) => Promise<McpRouteResult>;
   /**
-   * Servers that already produced an auth notice in this send, with the error they gave.
-   * Belongs to the send, so it is created where the send builds this context.
+   * Servers that already produced an auth or redirect notice in this send, with the error
+   * it gave. Belongs to the send, so it is created where the send builds this context.
    */
   authNotices?: Map<string, string>;
 }
@@ -97,7 +104,7 @@ export interface McpToolContext {
 /** Outcome of resolving a route on this device. */
 export type McpRouteResult =
   | { ok: true; routing: McpRouting; resolvedEndpoint: string }
-  | { ok: false; error: string; auth?: McpAuthSignal; scope?: string };
+  | { ok: false; error: string; auth?: McpAuthSignal; scope?: string; redirect?: true };
 
 const DECLINED: ToolResult = { ok: false, output: '', error: 'Tool call declined by the user.' };
 
@@ -211,6 +218,20 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
     return { ok: false, output: '', error, meta: { mcpAuth } };
   };
 
+  /**
+   * The constant result of a call whose server answered with a redirect, recorded once per
+   * server per send like the auth notices. It bypasses the scrubber on purpose: it holds the
+   * server's name and fixed words, never a credential.
+   */
+  const redirected = (server: McpActiveServer): ToolResult => {
+    const earlier = notices.get(server.id);
+    if (earlier !== undefined) return fail(earlier);
+    const error = mcpRedirectToolError(server.name);
+    notices.set(server.id, error);
+    const mcpRedirect: McpRedirectNotice = { serverId: server.id, serverName: server.name };
+    return { ok: false, output: '', error, meta: { mcpRedirect } };
+  };
+
   const tokenFailure = (
     server: McpActiveServer,
     result: Extract<McpTokenResult, { ok: false }>,
@@ -322,6 +343,7 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
               if (oauth && route.auth === 'insufficient-scope') {
                 return notice(server, 'scope', route.scope);
               }
+              if (route.redirect) return redirected(server);
               return fail(scrub(`Could not connect to ${server.name}: ${route.error}`, secrets));
             }
             // The chokepoint at the point of sending: a token goes to the server's own URL only.
@@ -348,6 +370,7 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
               continue;
             }
             if (oauth && r.auth === 'insufficient-scope') return notice(server, 'scope', r.scope);
+            if (r.redirect) return redirected(server);
             if (r.error) return fail(scrub(r.error, secrets));
             return { ok: true, output: r.stdout, error: null };
           }

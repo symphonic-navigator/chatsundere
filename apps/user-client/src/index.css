@@ -3779,6 +3779,73 @@ h1 {
   }
 }
 
+/* ===== Connector card (add_mcp_connector) ===== */
+/* A hostile-input surface: the link is shown in full and wraps anywhere, so a long
+ * look-alike makes a tall card instead of hiding its end. Inline-marker aesthetic:
+ * monospace on a subtle background, no glow, no motion. */
+.connector-pill-block {
+  display: block;
+  margin-block: 0.75rem;
+  max-width: 100%;
+}
+.connector-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  /* a fieldset's default min-inline-size is min-content, which would widen the card */
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-paper) 14%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 5%, var(--color-ink));
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.connector-pill-head {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  color: color-mix(in srgb, var(--color-paper) 75%, transparent);
+}
+.connector-pill-head strong {
+  font-weight: 700;
+  color: var(--color-paper);
+}
+.connector-pill-link {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-paper) 6%, transparent);
+}
+.connector-pill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.connector-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  max-width: 100%;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.connector-pill-line {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--color-paper) 70%, transparent);
+}
+
 /* ===== Generated-image thumbnails (ImagePill) ===== */
 /* The generate_image pill always breaks onto its own line; the inner
  * .pill-wrap / .artefact-pill keep their inline-flex shrink-wrap sizing. */

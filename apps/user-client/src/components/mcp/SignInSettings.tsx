@@ -6,6 +6,7 @@ import type { ServerDraft } from '../../mcp/oauth/sign-in.js';
 import { canonicalResource } from '../../mcp/oauth/url.js';
 import { sanitiseToolName, uniquePrefix } from '../../mcp/tool-naming.js';
 import { Button } from '../ui/Button.js';
+import { SuggestedInChat } from './CheckServerStep.js';
 import { hostOf } from './sign-in-copy.js';
 
 type SignInCheck = Extract<CheckResult, { kind: 'sign-in' }>;
@@ -33,6 +34,8 @@ export function existingConnection(
 /**
  * The settings shown with a `Sign-in required` result (spec §9 step 2). On by default
  * starts on here, because someone who deliberately signs in wants to use the server.
+ * After a link proposed in the chat (`suggestedHost`), *Tool prefix* and *Local network*
+ * sit behind a visible *More settings* (add-mcp-connector spec §5.3).
  */
 export function SignInSettings(props: {
   check: SignInCheck;
@@ -42,6 +45,8 @@ export function SignInSettings(props: {
   onOpenExisting: (id: string) => void;
   /** The draft chosen before backing out of the sign-in, restored as the starting values. */
   initial?: ServerDraft | undefined;
+  /** The host of a link proposed in the chat and not edited since; null otherwise. */
+  suggestedHost?: string | null;
 }): JSX.Element {
   const { check, rows, initial } = props;
   const host = hostOf(check.endpoint);
@@ -57,6 +62,11 @@ export function SignInSettings(props: {
   // A direct answer is the only proof this device can reach the server without a proxy.
   const [allowDirect, setAllowDirect] = useState(initial?.allowDirect ?? check.route === 'direct');
   const effectivePrefix = prefix ?? autoPrefix(name);
+  // A restored draft whose hidden settings were changed opens them, so nothing set is out of sight.
+  const [moreShown, setMoreShown] = useState(
+    prefix !== null ||
+      (initial !== undefined && initial.allowDirect !== (check.route === 'direct')),
+  );
 
   const existing = existingConnection(rows, check.discovery.resource);
   if (existing) {
@@ -77,8 +87,41 @@ export function SignInSettings(props: {
     );
   }
 
+  const prefixField = (
+    <div>
+      <label htmlFor="mcp-prefix" className={labelClass}>
+        Tool prefix
+      </label>
+      <input
+        id="mcp-prefix"
+        type="text"
+        value={effectivePrefix}
+        onChange={(e) => setPrefix(e.target.value)}
+        autoComplete="off"
+        className={inputClass}
+      />
+    </div>
+  );
+  const localNetworkField = (
+    <label
+      className="flex items-center gap-2 text-xs text-paper-soft"
+      title="Your browser connects straight to the server, which must allow direct browser access (CORS)."
+    >
+      <input
+        type="checkbox"
+        checked={allowDirect}
+        onChange={() => setAllowDirect((v) => !v)}
+        aria-label="Local network — connect directly (must support CORS)"
+      />
+      Local network <span className="text-paper-soft/60">(must support CORS)</span>
+    </label>
+  );
+  // Without a proposal the screen stays as it was: prefix under the name, Local network last.
+  const proposal = Boolean(props.suggestedHost);
+
   return (
     <div className="flex flex-col gap-3">
+      {props.suggestedHost ? <SuggestedInChat host={props.suggestedHost} /> : null}
       <div className="rounded-md border border-aurora-500/30 bg-aurora-500/[0.06] p-3">
         <div className="font-display text-sm text-paper">Sign-in required</div>
         <p className="text-xs text-paper-soft">
@@ -100,19 +143,7 @@ export function SignInSettings(props: {
         />
       </div>
 
-      <div>
-        <label htmlFor="mcp-prefix" className={labelClass}>
-          Tool prefix
-        </label>
-        <input
-          id="mcp-prefix"
-          type="text"
-          value={effectivePrefix}
-          onChange={(e) => setPrefix(e.target.value)}
-          autoComplete="off"
-          className={inputClass}
-        />
-      </div>
+      {proposal ? null : prefixField}
 
       <label className="flex items-center gap-2 text-xs text-paper-soft">
         <input
@@ -134,18 +165,19 @@ export function SignInSettings(props: {
         Trusted — run tools without approval
       </label>
 
-      <label
-        className="flex items-center gap-2 text-xs text-paper-soft"
-        title="Your browser connects straight to the server, which must allow direct browser access (CORS)."
-      >
-        <input
-          type="checkbox"
-          checked={allowDirect}
-          onChange={() => setAllowDirect((v) => !v)}
-          aria-label="Local network — connect directly (must support CORS)"
-        />
-        Local network <span className="text-paper-soft/60">(must support CORS)</span>
-      </label>
+      {proposal ? null : localNetworkField}
+
+      {proposal && moreShown ? (
+        <>
+          {prefixField}
+          {localNetworkField}
+        </>
+      ) : null}
+      {proposal && !moreShown ? (
+        <Button tone="neutral" className="self-start" onClick={() => setMoreShown(true)}>
+          More settings
+        </Button>
+      ) : null}
 
       <Button
         tone="primary"

@@ -140,6 +140,7 @@ export function buildMcpContext(args: BuildMcpContextArgs): McpToolContext | nul
           error: result.error ?? 'No route to the server.',
           ...(result.auth ? { auth: result.auth } : {}),
           ...(result.scope ? { scope: result.scope } : {}),
+          ...(result.redirect ? { redirect: true as const } : {}),
         };
       }
       const route = { routing: result.routing, resolvedEndpoint: result.resolvedEndpoint };

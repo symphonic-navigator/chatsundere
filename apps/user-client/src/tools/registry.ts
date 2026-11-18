@@ -4,6 +4,7 @@ import { INTEGRATIONS } from '../integrations/index.js';
 import type { IntegrationContext } from '../integrations/types.js';
 import { type KnowledgeContext, contributeKnowledgeTools } from '../knowledge/query-tool.js';
 import { type McpToolContext, contributeMcpTools } from '../mcp/mcp-tools.js';
+import { type ConnectorToolContext, contributeConnectorTool } from './add-mcp-connector.js';
 import { type ExpertBase, type ExpertWeb, createAskExpertTool } from './ask-expert.js';
 import { calculateJs } from './calculate-js.js';
 import { type ImageToolContext, contributeImageTool } from './generate-image.js';
@@ -28,7 +29,9 @@ export interface ExpertToolContext {
  *  the ask_expert tool when an expert context is given, the MCP server tools
  *  when an mcp context is given, the generate_image tool when an images
  *  context is given (always-offered design — present even when unconfigured),
- *  and the write_memory_entry tool when a memory context is given. */
+ *  the write_memory_entry tool when a memory context is given, and the
+ *  add_mcp_connector tool (directly after calculate_js) when a connector
+ *  context is given. */
 export function resolveActiveTools(
   ctx: IntegrationContext,
   knowledge: KnowledgeContext | null = null,
@@ -36,9 +39,11 @@ export function resolveActiveTools(
   mcp: McpToolContext | null = null,
   images: ImageToolContext | null = null,
   memory: MemoryToolContext | null = null,
+  connector: ConnectorToolContext | null = null,
 ): Tool[] {
   return [
     ...STATIC_TOOLS,
+    ...(connector ? [contributeConnectorTool(connector)] : []),
     ...INTEGRATIONS.flatMap((i) => i.contributesTools(ctx)),
     ...(knowledge ? contributeKnowledgeTools(knowledge) : []),
     ...(expert

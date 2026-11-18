@@ -29,3 +29,18 @@ export function safeReturnPath(raw: string | null | undefined, fallback: string)
   if (raw[1] === '/' || raw[1] === '\\') return fallback;
   return raw;
 }
+
+/**
+ * The page a `?return=` names, or null when there is none or it is not a site-relative
+ * path (spec §5.5 of the add-MCP-connector design). It never leaves the device; it only
+ * steers the exits of the page that reads it.
+ */
+export function readReturnTo(search: URLSearchParams): string | null {
+  return safeReturnPath(search.get('return'), '') || null;
+}
+
+/** `path` carrying the same `?return=`, so the next page comes home too; `path` alone without one. */
+export function withReturn(path: string, returnTo: string | null | undefined): string {
+  if (!returnTo) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}return=${encodeURIComponent(returnTo)}`;
+}

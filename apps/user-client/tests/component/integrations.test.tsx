@@ -39,7 +39,7 @@ vi.mock('../../src/content/help/use-help.js', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { McpServerRow } from '../../src/boot/client-data-db.js';
 import { Integrations } from '../../src/routes/app/integrations.js';
@@ -64,14 +64,20 @@ const ROW: McpServerRow = {
   updatedAt: 1,
 };
 
-function wrap() {
+function Where(): JSX.Element {
+  const { pathname, search } = useLocation();
+  return <div data-testid="where">{pathname + search}</div>;
+}
+
+function wrap(entry = '/app/integrations') {
   return render(
-    <MemoryRouter initialEntries={['/app/integrations']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/app/integrations" element={<Integrations />} />
         <Route path="/app/integrations/new" element={<div>add server screen</div>} />
         <Route path="/app/integrations/:serverId" element={<div>detail screen</div>} />
         <Route path="/app/integrations/sign-in/:state" element={<div>waiting screen</div>} />
+        <Route path="*" element={<Where />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -268,6 +274,27 @@ describe('Integrations list', () => {
       grants.rows = [grant()];
       wrap();
       expect(screen.getByText('● Connected (via proxy)')).toBeTruthy();
+    });
+  });
+
+  describe('Back', () => {
+    it.each([
+      [
+        'to the chat with a return',
+        `?return=${encodeURIComponent('/app/chat/c1')}`,
+        '/app/chat/c1',
+      ],
+      ['home without one, as today', '', '/app'],
+      ['home for a protocol-relative return', '?return=%2F%2Fevil.example', '/app'],
+      [
+        'home for an absolute return',
+        `?return=${encodeURIComponent('https://evil.example')}`,
+        '/app',
+      ],
+    ])('goes %s', async (_label, search, target) => {
+      wrap(`/app/integrations${search}`);
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect((await screen.findByTestId('where')).textContent).toBe(target);
     });
   });
 });
