@@ -3,19 +3,23 @@
  * Touch-target sweep for the user client (dev tool, not run in CI).
  *
  * Drives a running dev server in a 380 × 800 touch viewport with the iPhone
- * safe-area insets emulated, onboards a throwaway local account, mocks
+ * safe-area insets emulated, walks the onboarding wizards (each with its Back
+ * link) and the recovery-key hold, onboards a throwaway local account, mocks
  * OpenRouter (key check and a streamed chat reply), creates a persona with a
  * model, a chat with two replies, a bookmark and a knowledge library with one
  * document, then visits every screen it can reach (the first-run state between
  * a provider and a persona, the chat's cockpit and quick menus, the voice
  * notes of an account without a voice provider and, last, the login screen
- * asking for the passphrase) and reports:
+ * asking for the passphrase, with its recovery and start-over pages) and
+ * reports:
  *
  *   - undersized targets: every interactive element whose hit area is below
  *     44 px on either side. The hit area is the element's box united with its
  *     `::before`/`::after` box when that pseudo-element is absolutely
  *     positioned (the `.cs-hit` pattern), both cut by every overflow-clipping
  *     ancestor (a row with `overflow: hidden` clips what spills out of it).
+ *     A control wrapped in its `<label>` also takes the label's hit area, and
+ *     a point on any label counts as a point on the label's control.
  *   - overlaps: points of a 4 px grid over each hit area at which
  *     `document.elementFromPoint` lands on a different interactive element.
  *
@@ -223,6 +227,18 @@ function measureInPage({ min, grid }) {
         b: Math.max(box.b, pb),
       };
     }
+    // A tap on a <label> is a tap on its control, so a control wrapped in its
+    // label (a checkbox row) is hit wherever the label is.
+    const label = el.tagName === 'INPUT' ? el.closest('label') : null;
+    if (label) {
+      const lb = hitArea(label, clipOwn);
+      box = {
+        l: Math.min(box.l, lb.l),
+        t: Math.min(box.t, lb.t),
+        r: Math.max(box.r, lb.r),
+        b: Math.max(box.b, lb.b),
+      };
+    }
     return box;
   };
   const nameOf = (el) =>
@@ -243,8 +259,13 @@ function measureInPage({ min, grid }) {
       .filter(Boolean)
       .slice(0, 3)
       .join('.');
+  // The control a point belongs to; a point on a label (wrapping or `for`)
+  // belongs to the label's control.
   const owner = (node) => {
-    for (let n = node; n; n = n.parentElement) if (set.has(n)) return n;
+    for (let n = node; n; n = n.parentElement) {
+      if (set.has(n)) return n;
+      if (n.tagName === 'LABEL' && n.control && set.has(n.control)) return n.control;
+    }
     return null;
   };
   const describe = (el) => {
@@ -326,7 +347,14 @@ async function measure(p) {
   return p.evaluate(measureInPage, { min: MIN, grid: GRID });
 }
 
-async function boot(baseUrl) {
+/**
+ * Opens the app and walks the onboarding before setting up the local account:
+ * the welcome screen, each wizard page with a Back link (the confirm pages need
+ * a probed server, so they are expected to send the sweep elsewhere), the three
+ * local steps and the recovery-key hold, which brings a user who leaves the
+ * reveal straight back to it.
+ */
+async function boot(baseUrl, screens, notes) {
   const b = await chromium.launch();
   const ctx = await b.newContext({
     viewport: { width: 380, height: 800 },
@@ -338,13 +366,41 @@ async function boot(baseUrl) {
   const cdp = await ctx.newCDPSession(p);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: 34, top: 47 } });
   await p.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+  const path = () => p.url().replace(baseUrl, '');
+  const snap = async (key) => {
+    screens[key] = await measure(p);
+  };
+  await snap(`onboarding: ${path()}`);
+  for (const r of [
+    '/onboarding/invitation',
+    '/onboarding/invitation/scan',
+    '/onboarding/invitation/confirm',
+    '/onboarding/pairing',
+    '/onboarding/pairing/scan',
+    '/onboarding/pairing/confirm',
+    '/onboarding/recovery',
+  ]) {
+    await go(p, r);
+    await snap(`onboarding: ${r}${path() === r ? '' : ` -> ${path()}`}`);
+  }
+  await go(p, '/onboarding');
   await p.getByText('Just this device').click();
+  await p.waitForTimeout(800);
+  await snap('onboarding: /onboarding/local (step 1)');
   await p.getByLabel('Username').fill('sweep');
   await p.getByRole('button', { name: /continue/i }).click();
   const pw = p.locator('input[type=password]');
   await pw.nth(0).fill('correct horse battery 42');
   await pw.nth(1).fill('correct horse battery 42');
+  await snap('onboarding: /onboarding/local (step 2)');
   await p.getByRole('button', { name: /continue/i }).click();
+  await p.locator('input[type=checkbox]').waitFor();
+  await snap('onboarding: /onboarding/local (step 3, recovery key)');
+  await step(notes, 'recovery-key hold', async () => {
+    await go(p, '/onboarding');
+    await p.locator('input[type=checkbox]').waitFor({ timeout: 3000 });
+    await snap(`onboarding: recovery-key hold (left for /onboarding -> ${path()})`);
+  });
   await p.locator('input[type=checkbox]').check();
   await p.getByRole('button', { name: /open chatsundere/i }).click();
   await p.waitForURL(/\/app/);
@@ -375,9 +431,9 @@ async function sendAndWait(p, text, expectedReplies) {
 }
 
 async function sweep(baseUrl) {
-  const { b, p } = await boot(baseUrl);
   const screens = {};
   const notes = [];
+  const { b, p } = await boot(baseUrl, screens, notes);
   const path = () => p.url().replace(baseUrl, '');
   const snap = async (key) => {
     screens[key] = await measure(p);
@@ -443,6 +499,8 @@ async function sweep(baseUrl) {
   const routes = [
     '/app',
     '/app/circle',
+    // An id no persona has: the hub's not-found state and its way back.
+    '/app/persona/sweep-missing',
     `/app/persona/${pid}`,
     ...[
       'font-voice',
@@ -588,6 +646,11 @@ async function sweep(baseUrl) {
     await go(p, '/login?need=passphrase');
     await snap(`/login?need=passphrase${path().startsWith('/login') ? '' : ` -> ${path()}`}`);
   });
+  // The login page's side trips, each with its own way back to sign-in.
+  for (const r of ['/login/recovery', '/login/start-over']) {
+    await go(p, r);
+    await snap(r + (path() === r ? '' : ` -> ${path()}`));
+  }
 
   await b.close();
   return { screens, notes };

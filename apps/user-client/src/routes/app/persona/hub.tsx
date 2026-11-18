@@ -177,7 +177,7 @@ export function PersonaHub(): JSX.Element {
               e.preventDefault();
               nav.returnTo(CIRCLE);
             }}
-            className="text-sm text-paper underline"
+            className="cs-hit text-sm text-paper underline"
           >
             Back to My Circle
           </Link>

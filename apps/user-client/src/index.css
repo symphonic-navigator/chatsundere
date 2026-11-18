@@ -5970,6 +5970,16 @@ html {
   min-height: 2.75rem;
 }
 
+/* The recovery key's Copy sits 0.75rem under the key block, and 1rem above the
+   next control at its tightest (My Account's "I have saved it"): its hit area
+   grows 8 px down, half that gap, and the rest upwards, over the gap and the
+   key block's own padding, where nothing else takes taps. */
+.recovery-key-copy.cs-hit::before {
+  top: -20px;
+  bottom: -8px;
+  height: auto;
+}
+
 /* The cockpit menu's Text size chips wrap onto two rows 0.25rem apart, so a
    full 44 px hit area would overlap the chip above or beside: like the
    message controls, each takes half of the gap. */
