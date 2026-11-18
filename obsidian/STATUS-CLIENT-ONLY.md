@@ -8,6 +8,28 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-18 (night) — **v0.5.0 RELEASED.** `v0.5.0` on `880c604a` (the squash of
+release PR #67). Chris asked for it after a `pnpm dev` round, before the per-spec device tests on
+the phones. `CHANGELOG.md` has the 0.5.0 section, written from the Kumbu² diary.
+- **Lock-screen and headset controls are off:** `READ_ALOUD_MEDIA_BRIDGE` is `false` for 0.5.0
+  (Chris's decision), because the bridge has not been listened to on a phone yet. Wake lock and the
+  thumb pass are in. Listening check due 2026-11-19, Android by Chris, iPhone by someone else.
+  If both pass, the constant goes back to `true` in a 0.5.x.
+- **Branching exception written down:** [ADR 0041](decisions/0041-no-maintenance-branch-for-0.5.md),
+  `RELEASE-PROCESS.md`, CLAUDE.md §8/§12. There is no `maintenance/0.5`. `master` carries the
+  released 0.5 line (`version.txt` 0.5.1) and takes only models, security fixes and fixes.
+  Eidolon builds on `eidolon`, which is created once the 0.5.0 work is finished.
+- **Still open:** the per-spec device tests (anything they find becomes 0.5.1), the imitation
+  probe for the `<sent>` stamps, checking every existing MCP server after the deploy, Komodo, the
+  Garage migration (guided), curation (LLMs, new nano-gpt image models), and the
+  `transaction-guard` race. CLAUDE.md §10 is not rewritten yet; that waits for the device tests,
+  as decided. Checklist: Kumbu² `/SWE/Chatsundere/Versions/0.5.0 release checklist.md`.
+
+**Next:** the listening check on both phones and the device tests on 0.5.0. Then Komodo, Garage and
+curation on `master`, and after that, `eidolon`.
+
+---
+
 **Last updated:** 2026-11-18 — **0.5.0: ALL UNITS ON `master`, NOT TAGGED, AWAITING CHRIS'S DEVICE
 TESTS.** Decided by Chris on 2026-11-18: 0.5.0 is the last large release before the Eidolon
 integration and has to carry users for a long time; after it only bug fixes and new models follow.
