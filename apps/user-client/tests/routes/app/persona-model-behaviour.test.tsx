@@ -209,3 +209,38 @@ describe('PersonaModelBehaviour — Ask an expert by default toggle', () => {
     await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ askExpertDefault: false }));
   });
 });
+
+describe('PersonaModelBehaviour — Knows the date and time', () => {
+  const PRIVACY = /your ai provider sees these times too/i;
+  const TIMELESS = /off for roleplay characters, so a fantasy world stays timeless/i;
+
+  it('is on by default for a non-roleplay persona, with the privacy line visible', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1');
+    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(PRIVACY)).toBeInTheDocument();
+    expect(screen.queryByText(TIMELESS)).toBeNull();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ timeAwareness: false }));
+  });
+
+  it('is off for a roleplay persona while unset, and says why', async () => {
+    state.persona = { ...BASE_PERSONA, roleplay: true };
+    renderPage('p-1');
+    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(PRIVACY)).toBeInTheDocument();
+    expect(screen.getByText(TIMELESS)).toBeInTheDocument();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ timeAwareness: true }));
+  });
+
+  it('drops the roleplay note once the owner has chosen', async () => {
+    state.persona = { ...BASE_PERSONA, roleplay: true, timeAwareness: true } as typeof BASE_PERSONA;
+    renderPage('p-1');
+    const toggle = await screen.findByRole('button', { name: /^knows the date and time$/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(TIMELESS)).toBeNull();
+  });
+});

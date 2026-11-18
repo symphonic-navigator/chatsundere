@@ -30,6 +30,8 @@ function setup(over: Partial<ChatQuickMenuProps> = {}) {
     onClose: vi.fn(),
     onEntranceHall: vi.fn(),
     onNavigate: vi.fn(),
+    exportState: 'ready',
+    onExport: vi.fn(),
     ...over,
   };
   render(<ChatQuickMenu {...props} />);
@@ -45,7 +47,7 @@ describe('ChatQuickMenu', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('lists the nine entries in order', () => {
+  it('lists the ten entries in order', () => {
     setup();
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim());
     expect(labels).toEqual([
@@ -56,6 +58,7 @@ describe('ChatQuickMenu', () => {
       'Memories',
       'History',
       'Knowledge',
+      'Export chat',
       'Image settings',
       'Voice settings',
     ]);
@@ -146,6 +149,7 @@ describe('ChatQuickMenu', () => {
       'Memories',
       'History',
       'Knowledge',
+      'Export chat',
       'Image settings',
       'Voice settings',
     ]);

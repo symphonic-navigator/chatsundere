@@ -58,7 +58,7 @@ export function Settings(): JSX.Element {
           icon={User}
           label="You"
           to="/app/settings/you"
-          meta="how the AI sees you"
+          meta="how the AI sees you · motion"
         />
         <NavTile
           colour="pink"

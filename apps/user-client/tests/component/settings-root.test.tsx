@@ -56,6 +56,12 @@ describe('My Settings root matrix', () => {
     }
   });
 
+  it('names motion on the You tile, so Reduce animations is findable', async () => {
+    wrap(<Settings />);
+    const tile = await screen.findByRole('button', { name: 'You' });
+    expect(tile).toHaveTextContent('how the AI sees you · motion');
+  });
+
   it('disables Web Access when no provider offers web', async () => {
     wrap(<Settings />);
     const web = await screen.findByRole('button', { name: 'Web Access' });

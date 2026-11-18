@@ -12,6 +12,10 @@ How many tokens the model keeps in memory for each conversation. The green zone 
 
 This control appears only when a model has been selected on the hub. If you see the note instead, go back to the hub and choose a provider and model first.
 
+## Knows the date and time
+
+When on, each of your messages carries its local date and time, so your companion knows the weekday, the time of day and how long you were away. Your AI provider sees these times too. It is on by default, and off by default for roleplay characters, so a fantasy world stays timeless; once you set it yourself, your choice stays, whatever the Roleplay switch says.
+
 ## Ask an expert by default
 
 When enabled, new chats with this persona will automatically route complex questions to the global expert model you have configured in **My Settings → Ask an Expert**. You can override this per chat from the cockpit. The toggle is disabled until a global expert model is set.

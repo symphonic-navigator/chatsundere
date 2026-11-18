@@ -12,6 +12,7 @@ import { enqueueDocument } from '../knowledge/start-ingestion.js';
 import type { ParsedKnowledgeExport } from '../lib/chatsune-import/knowledge-parse.js';
 import { mapChatsuneMessage } from '../lib/chatsune-import/message-map.js';
 import type { ChatsuneMemoryExport, ChatsuneSessionExport } from '../lib/chatsune-import/types.js';
+import { deviceOffsetMinutes } from '../lib/time-awareness.js';
 import { normalisePhrases } from '../lib/treasury-filter.js';
 import { normaliseForDedup } from '../memory/dedup.js';
 import { getCurrentBody, listBodyVersions, listJournal, saveBody } from '../memory/repo.js';
@@ -115,6 +116,10 @@ export async function importChatsuneSessions(
           updatedAt: mapped.createdAt,
           bookmarked: false,
           streamingState: 'complete',
+          // Fixed once at import, so the stamp no longer follows later zone changes.
+          ...(mapped.role === 'user'
+            ? { utcOffsetMinutes: deviceOffsetMinutes(mapped.createdAt) }
+            : {}),
         });
         if (linked) enqueueSync(tx, 'messages', messageId, 'upsert');
       }

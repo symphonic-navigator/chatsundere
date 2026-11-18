@@ -2298,3 +2298,208 @@ describe('stream-manager.store', () => {
     await store.abortDiscard(myChatId);
   });
 });
+
+describe('stream-manager.store — send times for the <sent> stamp', () => {
+  const realTz = process.env.TZ;
+  beforeEach(async () => {
+    await _resetClientDataDbForTests({ keepData: false });
+  });
+  afterEach(async () => {
+    process.env.TZ = realTz;
+    await _resetClientDataDbForTests({ keepData: false });
+    vi.restoreAllMocks();
+    useStreamManagerStore.setState({ streams: new Map() });
+  });
+
+  function captureEngine(): Array<Record<string, unknown>> {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.spyOn(engine, 'runStreamEngine').mockImplementation((async (a: Record<string, unknown>) => {
+      calls.push(a);
+      return { finalContentBlocks: [], pillRows: [], finishReason: 'stop', usedTokens: 0 };
+    }) as never);
+    return calls;
+  }
+
+  it('start stores the device offset on the user row and hands the engine its send time', async () => {
+    process.env.TZ = 'Asia/Kathmandu';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const calls = captureEngine();
+    await useStreamManagerStore
+      .getState()
+      .start(baseStartArgs(chatId, persona, nanoGpt.offerings[0]) as never);
+    await new Promise((r) => setTimeout(r, 50));
+    const user = (await db.messages.where('chatId').equals(chatId).toArray()).find(
+      (m) => m.role === 'user',
+    );
+    expect(user?.utcOffsetMinutes).toBe(345);
+    expect(calls[0]?.userMessageAt).toEqual({ createdAt: user?.createdAt, utcOffsetMinutes: 345 });
+  });
+
+  it('regenerate replays the stored send time, not the clock or the current zone', async () => {
+    process.env.TZ = 'America/New_York';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    await db.messages.bulkAdd([
+      {
+        id: 'u1',
+        chatId,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'q' }],
+        createdAt: 1_000,
+        utcOffsetMinutes: 60,
+        updatedAt: 1_000,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+      {
+        id: 'pm1',
+        chatId,
+        role: 'persona',
+        contentBlocks: [{ type: 'text', text: 'old' }],
+        createdAt: 2_000,
+        updatedAt: 2_000,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ]);
+    const calls = captureEngine();
+    await useStreamManagerStore.getState().regenerate({
+      ...baseStartArgs(chatId, persona, nanoGpt.offerings[0]),
+      userMessageText: 'q',
+      targetMessageId: 'pm1',
+      userMessageId: 'u1',
+    } as never);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls[0]?.userMessageAt).toEqual({ createdAt: 1_000, utcOffsetMinutes: 60 });
+  });
+
+  it('the opener gets "now" and the device offset', async () => {
+    process.env.TZ = 'Europe/Berlin';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { openerPending: true });
+    const persona = await db.personas.get(personaId);
+    const calls = captureEngine();
+    const before = Date.now();
+    const base = baseStartArgs(chatId, persona, nanoGpt.offerings[0]);
+    await useStreamManagerStore
+      .getState()
+      .startOpener({ ...base, chat: { ...base.chat, openerPending: true } } as never);
+    await new Promise((r) => setTimeout(r, 50));
+    const at = calls[0]?.openerAt as { createdAt: number; utcOffsetMinutes: number };
+    expect(calls[0]?.job).toBe('greeting');
+    expect(at.createdAt).toBeGreaterThanOrEqual(before);
+    expect(at.utcOffsetMinutes).toBe(-new Date(at.createdAt).getTimezoneOffset());
+  });
+
+  /** Stub the transport (the real engine and tool loop run) and record each
+   *  round's wire. `rounds[i]` is the chunk list round i streams; past the end,
+   *  a plain answer. */
+  function captureWire(rounds: llmUnified.StreamChunk[][]): llmUnified.WireMessage[][] {
+    const wires: llmUnified.WireMessage[][] = [];
+    vi.spyOn(llmUnified, 'streamCompletion').mockImplementation(async function* (x) {
+      wires.push(structuredClone((x as { messages: llmUnified.WireMessage[] }).messages));
+      const chunks = rounds[wires.length - 1] ?? [
+        { type: 'token', text: 'done' },
+        { type: 'finish', reason: 'stop' },
+      ];
+      for (const c of chunks) yield c;
+    });
+    return wires;
+  }
+
+  // A rendered stamp opens with a weekday; the system prompt's instruction
+  // only names the tag, so it is not counted.
+  const stampCount = (wire: llmUnified.WireMessage[]): number =>
+    (JSON.stringify(wire).match(/<sent>[A-Z][a-z]{2} /g) ?? []).length;
+
+  it('every tool-loop round sends one stamp on the active turn, byte-identical to round one', async () => {
+    process.env.TZ = 'Europe/Berlin';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const model = nanoGpt.offerings[0] as llmUnified.Offering;
+    const toolCall = (id: string): llmUnified.StreamChunk[] => [
+      { type: 'tool-call', toolCallId: id, name: 'no_such_tool', argumentsJson: '{}' },
+      { type: 'finish', reason: 'tool_calls' },
+    ];
+    const wires = captureWire([toolCall('t1'), toolCall('t2')]);
+    await useStreamManagerStore.getState().start({
+      ...baseStartArgs(chatId, persona, model),
+      offering: { ...model, profile: { ...model.profile, toolCalls: { supported: true } } },
+    } as never);
+    await vi.waitFor(() => expect(wires).toHaveLength(3));
+
+    const first = wires[0] as llmUnified.WireMessage[];
+    const activeIdx = first.length - 1;
+    const active = first[activeIdx];
+    expect(active?.role).toBe('user');
+    expect(stampCount(first)).toBe(1);
+    for (const wire of wires.slice(1)) {
+      expect(stampCount(wire)).toBe(1);
+      expect(JSON.stringify(wire[activeIdx])).toBe(JSON.stringify(active));
+      // The tool exchange follows the active turn and carries no stamp of its own.
+      expect(wire.length).toBeGreaterThan(first.length);
+    }
+    await vi.waitFor(() =>
+      expect(useStreamManagerStore.getState().streams.has(chatId)).toBe(false),
+    );
+  });
+
+  it('an edit-replace stamps the active turn from the stored row, not the clock', async () => {
+    process.env.TZ = 'Asia/Tokyo';
+    const { db, chatId, personaId } = await seedChat();
+    await db.chats.update(chatId, { title: 'kept' });
+    const persona = await db.personas.get(personaId);
+    const sentAt = Date.parse('2026-11-18T20:14:00Z');
+    await db.messages.bulkAdd([
+      {
+        id: 'u1',
+        chatId,
+        role: 'user',
+        contentBlocks: [{ type: 'text', text: 'original' }],
+        createdAt: sentAt,
+        utcOffsetMinutes: 60,
+        updatedAt: sentAt,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+      {
+        id: 'pm1',
+        chatId,
+        role: 'persona',
+        contentBlocks: [{ type: 'text', text: 'old reply' }],
+        createdAt: sentAt + 60_000,
+        updatedAt: sentAt + 60_000,
+        bookmarked: false,
+        streamingState: 'complete',
+      },
+    ]);
+    // What useEditAndReplace writes before it re-rolls: new text, a fresh
+    // updatedAt, and the send time left alone.
+    await db.messages.update('u1', {
+      contentBlocks: [{ type: 'text', text: 'edited' }],
+      updatedAt: Date.now(),
+    });
+    const wires = captureWire([]);
+    await useStreamManagerStore.getState().regenerate({
+      ...baseStartArgs(chatId, persona, nanoGpt.offerings[0]),
+      userText: 'edited',
+      userMessageText: 'edited',
+      targetMessageId: 'pm1',
+      userMessageId: 'u1',
+    } as never);
+    await vi.waitFor(() => expect(wires).toHaveLength(1));
+
+    const wire = wires[0] as llmUnified.WireMessage[];
+    const active = wire[wire.length - 1];
+    expect(active?.role).toBe('user');
+    expect(active?.content).toBe(`${llmUnified.formatSentStamp(sentAt, 60)}\nedited`);
+    expect(active?.content).toBe('<sent>Wed 18 Nov 2026, 21:14</sent>\nedited');
+    await vi.waitFor(() =>
+      expect(useStreamManagerStore.getState().streams.has(chatId)).toBe(false),
+    );
+  });
+});

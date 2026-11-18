@@ -8,8 +8,13 @@ import { reconcileStaging } from './boot/reconcile-staging.js';
 import { checkRuntime } from './boot/runtime-check.js';
 import { initServerFoundation } from './boot/server-foundation.js';
 import { startKnowledgeIngestion } from './knowledge/start-ingestion.js';
+import { applyStoredMotionAttribute } from './lib/reduced-motion.js';
 import { useBootStore } from './state/boot.store.js';
 import './index.css';
+
+// Before the first render, so a device with "Reduce animations" on never
+// shows the animated splash while the settings row is still loading.
+applyStoredMotionAttribute();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root not found');
