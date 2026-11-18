@@ -29,7 +29,7 @@ Losing the provider's prefix cache makes a chat roughly ten times more expensive
 | On a second device | Yes. `createdAt` and `utcOffsetMinutes` sync inside the sealed message record; the second device renders the same bytes even in another time zone. |
 | Regenerate | Yes. The user turn is untouched (`regenerate` clears only the persona reply), so it keeps its stamp. |
 | Edit (replace in place, last user turn) | Every turn before the edited one is identical. The edited turn keeps its `createdAt` and offset, so its stamp is identical too; only its text changes, as today. |
-| Branch | Yes. Both branch paths (`useBranchChat` in `data/chats.ts` and the edit-branch in `data/message-edit.ts`) already copy `createdAt` from an explicit field list; both must also copy `utcOffsetMinutes`, so the plan names them. The branch's prefix is then byte-identical to the source chat's. |
+| Branch | Yes. Both branch paths (`useBranchChat` in `data/chats.ts` and the edit-branch in `data/message-edit.ts`) already copy `createdAt` from an explicit field list; both must also copy `utcOffsetMinutes` and `seedRole` (A8), so the plan names them. The branch's prefix is then byte-identical to the source chat's. |
 | Mixed versions (a 0.4.x device in the account) | Yes, except for a branch made on 0.4.x (event 5). Checked in the 0.4.x code: an in-place edit is a Dexie `update` that merges and keeps unknown fields; regenerate only rewrites the persona row; sealing (`stripForSeal`) spreads the whole message row and strips named device-local fields only; applying a pulled row puts the whole sealed record. So the offset survives every 0.4.x path that rewrites an existing row. |
 | Compaction | The tail turns keep their stamps. The summary sits in the system prompt as today; compaction moves the prefix exactly as it does without this feature. |
 | Tool loop | The user turn's stamp is rendered once per turn and is the same in every round; assistant tool calls and tool results carry nothing new. |
@@ -124,6 +124,10 @@ The second sentence uses `persona.lastInteractionAt` (whole hours under a day, d
 - `packages/llm-unified`: a pure `formatSentStamp(createdAt, utcOffsetMinutes)` and `formatAwayGap(ms)` with tests; the `time` segment in `composition.ts`, driven by a new `BuildPromptInputs.time?: { mode: 'chat' } | { mode: 'greeting'; now: number; utcOffsetMinutes: number; lastInteractionAt?: number }` (absent ⇒ empty segment). No browser globals in the library.
 - `apps/user-client`: `start` stores `utcOffsetMinutes` on the new user row; `buildEngineWireMessages` stamps user rows (prior and active) when the resolved switch is on, so the engine gets the active turn's `createdAt` and offset alongside its content; the greeting call passes its inputs; `estimateReplayTokens`, the overflow failsafe in `start` and the chat page's gauge count the stamp and segment, so meter and wire agree; both branch paths copy the offset; the Model behaviour and Roleplay pages and `modelBehaviourMeta` get the switch, line and token.
 
+### A8. Branches keep `seedRole` (fault fix, folded in by Chris)
+
+Both branch paths copy `kind` but not `seedRole` (found while checking A2; present before 0.5.0). A branched seed greeting then has `kind: 'seed'` without `seedRole: 'greeting'`, so `isContextMessage` puts it on the wire as a persona turn and `resolveOpenerContext` no longer echoes it, and branched seed body turns lose the guard that keeps them out of message editing. Fix: both paths copy `seedRole`. Test-first: a test branches a seeded chat and asserts the branched greeting is wire-excluded and echoed exactly as in the source chat; it must fail before the fix. If it does not fail, the fault is not real and the fix is dropped, said so in the report. The stamp rule (A1) keys on `kind === 'seed'`, so it does not depend on `seedRole`.
+
 ### A7. Imitation
 
 Models sometimes copy a format they see in context into their replies. Three defences, cheapest first:
@@ -134,12 +138,12 @@ Models sometimes copy a format they see in context into their replies. Three def
 
 **Probe:** this session has no provider keys, so the plan carries a curation probe Chris runs with his keys via `/curate` (never in CI, CLAUDE.md §10): a 20-turn standard conversation on four curated offerings (one Anthropic model, one DeepSeek or GLM via nano-gpt, Grok, Mistral), counting replies that contain `<sent` or start with a date-like line. Pass: no echo. If a model echoes, a one-line strip of a leading `<sent>…</sent>` from the streamed reply is the fallback, decided then.
 
-## Open questions for Chris
+## Questions, decided by Chris on 2026-11-18
 
-- **Q-A1. The `<sent>…</sent>` tag (18 tokens) over brackets (14 tokens)?** *Recommended: the tag.* Four tokens per turn buy a format models are less likely to continue as a chat log, and the probe settles it either way before the squash.
-- **Q-A2. Store the time-zone offset with each message?** *Recommended: yes* (A2): stable bytes on every device and after travel, and a stamp that tells the truth about the time it was for the user when they wrote.
-- **Q-A3. The opener's "they last talked with you 2 days ago" sentence?** *Recommended: keep it.* The opener has no timeline to read, so this is the only way it can say "welcome back".
-- **Q-A4. Switch on Model behaviour, with the cross-reference on the Roleplay page?** *Recommended: yes* (Laura agrees). Most personas are not roleplay characters, and their owners would never look under "Roleplay".
+- **Q-A1. The `<sent>…</sent>` tag (18 tokens) over brackets (14 tokens)?** *Recommended: the tag.* Four tokens per turn buy a format models are less likely to continue as a chat log, and the probe settles it either way before the squash. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-A2. Store the time-zone offset with each message?** *Recommended: yes* (A2): stable bytes on every device and after travel, and a stamp that tells the truth about the time it was for the user when they wrote. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-A3. The opener's "they last talked with you 2 days ago" sentence?** *Recommended: keep it.* The opener has no timeline to read, so this is the only way it can say "welcome back". **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-A4. Switch on Model behaviour, with the cross-reference on the Roleplay page?** *Recommended: yes* (Laura agrees). Most personas are not roleplay characters, and their owners would never look under "Roleplay". **Decided by Chris, 2026-11-18: as recommended.**
 
 ## Audit gates
 
@@ -228,12 +232,12 @@ Long. *[Image: harbour.jpg]*
 - **Failure:** if loading or building fails, the toast *"Couldn't export this chat"*, never silence.
 - The builder is a pure `chatToMarkdown(...)` in `lib/chat-export.ts` with tests.
 
-## Open questions for Chris
+## Questions, decided by Chris on 2026-11-18
 
-- **Q-B1. Front matter in the file?** *Recommended: yes.* Kumbu² and Obsidian read it, and it costs four lines for everyone else.
-- **Q-B2. Leave reasoning out?** *Recommended: yes.* The file is the conversation as read; reasoning is often longer than the reply and would bury it. A collapsed `<details>` per reply is the natural later addition.
-- **Q-B3. Attachments as names only?** *Recommended: yes.* Base64 images make a file of megabytes no notes app shows well; a zip with the images is a different, larger feature.
-- **Q-B4. Share sheet on Android too?** (S-B2) *Recommended: yes, verified by step 3 below.* Some Android builds offer no "save to files" target in the share sheet. If Chris's device shows that, the fallback is: on Android, download first and offer *Share* as the toast's action.
+- **Q-B1. Front matter in the file?** *Recommended: yes.* Kumbu² and Obsidian read it, and it costs four lines for everyone else. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-B2. Leave reasoning out?** *Recommended: yes.* The file is the conversation as read; reasoning is often longer than the reply and would bury it. A collapsed `<details>` per reply is the natural later addition. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-B3. Attachments as names only?** *Recommended: yes.* Base64 images make a file of megabytes no notes app shows well; a zip with the images is a different, larger feature. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-B4. Share sheet on Android too?** (S-B2) *Recommended: yes, verified by step 3 below.* Some Android builds offer no "save to files" target in the share sheet. If Chris's device shows that, the fallback is: on Android, download first and offer *Share* as the toast's action. **Decided by Chris, 2026-11-18: as recommended.**
 
 ## Audit gates
 
@@ -294,10 +298,10 @@ Laura spec-pass done. No Larissa path. The file is plaintext leaving the vault b
 - **Dev, build and tests.** The plugin's `transform` hook runs the same way under `vite` (dev) and `vite build`. Vitest does not process CSS by default (component tests see no stylesheet either way), so the CSS behaviour is covered by the plugin's own unit tests calling the transform directly, and the JS checks by their tests with the root attribute set.
 - **JS:** the existing checks (`motion.respectsReducedMotion()` in `packages/ui-shared`, `prefersReducedMotion()` in the screen-effects store, the Lightbox, the splash, the spectrum analyser's media query) answer true when either the media query matches or the root attribute is set. `BreathingOrb` and `NavTile` read through a small `useReducedMotion()` hook so a flip takes effect without a reload.
 
-## Open questions for Chris
+## Questions, decided by Chris on 2026-11-18
 
-- **Q-C1. The switch under My Settings › You, beside Mindspace, with the tile meta "how the AI sees you · motion"?** *Recommended: yes.* There is no Appearance page, and a tile for one switch is heavier than it is worth. A later *Display* page holding this and screen effects stays the right home if one is ever made.
-- **Q-C2. Mirror the system behaviour exactly, rather than a stronger "everything off"?** *Recommended: yes* (Laura agrees). The reduced-motion blocks were written per component with care; functional motion such as the streaming cursor and the compacting pulse stays honest. One proven behaviour, two ways in.
+- **Q-C1. The switch under My Settings › You, beside Mindspace, with the tile meta "how the AI sees you · motion"?** *Recommended: yes.* There is no Appearance page, and a tile for one switch is heavier than it is worth. A later *Display* page holding this and screen effects stays the right home if one is ever made. **Decided by Chris, 2026-11-18: as recommended.**
+- **Q-C2. Mirror the system behaviour exactly, rather than a stronger "everything off"?** *Recommended: yes* (Laura agrees). The reduced-motion blocks were written per component with care; functional motion such as the streaming cursor and the compacting pulse stays honest. One proven behaviour, two ways in. **Decided by Chris, 2026-11-18: as recommended.**
 
 ## Audit gates
 
