@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button.js';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog.js';
 import { OverflowMenu } from '../../../components/ui/OverflowMenu.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import {
   useCreateSeedTemplate,
@@ -213,7 +214,9 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
         {/* NSFW toggle with the vanish-guard. */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Adult (NSFW)</div>
+            <label htmlFor="template-adult-switch" className="block text-sm text-paper">
+              Adult (NSFW)
+            </label>
             {nsfwLockOn ? (
               <p className="text-[11px] text-paper-soft">
                 Turn on adult mode first — otherwise this template would be hidden the moment you
@@ -225,51 +228,34 @@ function TemplateForm({ existing }: { existing: SeedTemplateRow | undefined }): 
               </p>
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Adult (NSFW)"
-            aria-pressed={nsfw}
+          <Switch
+            id="template-adult-switch"
+            ariaLabel="Adult (NSFW)"
+            checked={nsfw}
             disabled={nsfwLockOn}
-            aria-disabled={nsfwLockOn}
-            onClick={() => {
-              if (nsfwLockOn) return;
+            onChange={() => {
               setNsfw((v) => !v);
               mark();
             }}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              nsfw ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            } ${nsfwLockOn ? 'opacity-40' : ''}`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                nsfw ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+            className={nsfwLockOn ? 'opacity-40' : undefined}
+          />
         </div>
 
         {/* Greeting */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-paper">Opening greeting</span>
-            <button
-              type="button"
-              aria-label="Opening greeting"
-              aria-pressed={greetingEnabled}
-              onClick={() => {
+            <label htmlFor="template-greeting-switch" className="text-sm text-paper">
+              Opening greeting
+            </label>
+            <Switch
+              id="template-greeting-switch"
+              ariaLabel="Opening greeting"
+              checked={greetingEnabled}
+              onChange={() => {
                 setGreetingEnabled((v) => !v);
                 mark();
               }}
-              className={`h-6 w-12 shrink-0 rounded-full border ${
-                greetingEnabled ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-              }`}
-            >
-              <span
-                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                  greetingEnabled ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            />
           </div>
           {greetingEnabled ? (
             <textarea

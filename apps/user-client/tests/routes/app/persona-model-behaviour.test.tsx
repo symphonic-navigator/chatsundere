@@ -164,7 +164,7 @@ describe('PersonaModelBehaviour — Ask an expert by default toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-model-behaviour')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /ask an expert by default/i });
+    const toggle = screen.getByRole('switch', { name: /ask an expert by default/i });
     expect(toggle).toBeDisabled();
     expect(toggle).toHaveAttribute('title', 'Choose a global expert model in Settings first.');
   });
@@ -176,7 +176,7 @@ describe('PersonaModelBehaviour — Ask an expert by default toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-model-behaviour')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /ask an expert by default/i });
+    const toggle = screen.getByRole('switch', { name: /ask an expert by default/i });
     expect(toggle).not.toBeDisabled();
     expect(toggle).not.toHaveAttribute('title');
   });
@@ -188,8 +188,8 @@ describe('PersonaModelBehaviour — Ask an expert by default toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-model-behaviour')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /ask an expert by default/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    const toggle = screen.getByRole('switch', { name: /ask an expert by default/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(toggle);
 
     await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ askExpertDefault: true }));
@@ -202,8 +202,8 @@ describe('PersonaModelBehaviour — Ask an expert by default toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-model-behaviour')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /ask an expert by default/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = screen.getByRole('switch', { name: /ask an expert by default/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
 
     await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ askExpertDefault: false }));

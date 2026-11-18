@@ -117,16 +117,16 @@ describe('PersonaMemory — persona-global settings', () => {
     // Scope label must be unmistakable — user must not mistake this for a per-chat switch.
     expect(await screen.findByText(/applies to all chats with fable/i)).toBeInTheDocument();
     // Toggle itself is present and reflects the current state.
-    const toggle = screen.getByRole('button', { name: /^remembering$/i });
+    const toggle = screen.getByRole('switch', { name: /^remembering$/i });
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
   });
 
   it('flipping the Remembering toggle writes useMemory to the persona', async () => {
     setup('/app/persona/p1/memory');
     await screen.findByText(/applies to all chats with fable/i);
 
-    const toggle = screen.getByRole('button', { name: /^remembering$/i });
+    const toggle = screen.getByRole('switch', { name: /^remembering$/i });
     await userEvent.click(toggle);
 
     await waitFor(async () => {

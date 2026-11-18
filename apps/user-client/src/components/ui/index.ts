@@ -12,3 +12,4 @@ export { PageScaffold, type PageScaffoldProps } from './PageScaffold.js';
 export { ReadingOverlay, type ReadingOverlayProps } from './ReadingOverlay.js';
 export { PickerOverlay, type PickerOverlayProps } from './PickerOverlay.js';
 export { PickerField, type PickerFieldProps } from './PickerField.js';
+export { Switch, type SwitchProps } from './Switch.js';

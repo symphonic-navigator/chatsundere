@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Link, useLocation } from 'react-router-dom';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useSettings, useUpdateSettings } from '../../../data/settings.js';
 import { useProjects } from '../../../projects/hooks.js';
 import { toastStore } from '../../../state/toast.store.js';
@@ -57,9 +58,13 @@ export function SettingsPreviewsPage(): JSX.Element {
         ) : null}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm text-paper" id="preview-projects-label">
+            <label
+              htmlFor="preview-projects-switch"
+              className="block text-sm text-paper"
+              id="preview-projects-label"
+            >
               Projects (preview)
-            </div>
+            </label>
             <p className="text-[11px] text-paper-soft">
               An early look at project files. Projects live on this device only for now.
             </p>
@@ -71,23 +76,13 @@ export function SettingsPreviewsPage(): JSX.Element {
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-labelledby="preview-projects-label"
+          <Switch
+            id="preview-projects-switch"
+            checked={on}
+            onChange={toggle}
+            labelledBy="preview-projects-label"
             disabled={settings.data === undefined}
-            onClick={toggle}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              on ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-            }`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                on ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          />
         </div>
       </div>
     </PageScaffold>

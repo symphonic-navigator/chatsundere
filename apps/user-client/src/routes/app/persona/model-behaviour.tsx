@@ -4,6 +4,7 @@ import { getOffering } from '@chatsundere/llm-unified';
 import { Link, useParams } from 'react-router-dom';
 import { ContextWindowControl } from '../../../components/persona-editor/ContextWindowControl.js';
 import { PageScaffold } from '../../../components/ui/PageScaffold.js';
+import { Switch } from '../../../components/ui/Switch.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings } from '../../../data/settings.js';
@@ -121,30 +122,22 @@ export function PersonaModelBehaviour(): JSX.Element {
         {/* 3. Ask an expert by default ─────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm text-paper">Ask an expert by default</div>
+            <label htmlFor="persona-ask-expert-switch" className="block text-sm text-paper">
+              Ask an expert by default
+            </label>
             <p className="text-[11px] text-paper-soft">
               Default for new chats; override per chat from the cockpit.
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Ask an expert by default"
-            aria-pressed={persona.askExpertDefault}
+          <Switch
+            id="persona-ask-expert-switch"
+            ariaLabel="Ask an expert by default"
+            checked={persona.askExpertDefault}
             disabled={expertMissing}
             title={expertMissing ? 'Choose a global expert model in Settings first.' : undefined}
-            onClick={() => void patch({ askExpertDefault: !persona.askExpertDefault })}
-            className={`h-6 w-12 shrink-0 rounded-full border ${
-              persona.askExpertDefault
-                ? 'border-paper bg-paper/30'
-                : 'border-paper-soft/30 bg-white/5'
-            } disabled:cursor-not-allowed disabled:opacity-40`}
-          >
-            <span
-              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                persona.askExpertDefault ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
+            onChange={() => void patch({ askExpertDefault: !persona.askExpertDefault })}
+            className="disabled:cursor-not-allowed disabled:opacity-40"
+          />
         </div>
       </div>
     </PageScaffold>

@@ -111,8 +111,8 @@ describe('PersonaRoleplay — Roleplay toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /^roleplay$/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    const toggle = screen.getByRole('switch', { name: /^roleplay$/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
 
     fireEvent.click(toggle);
 
@@ -125,8 +125,8 @@ describe('PersonaRoleplay — Roleplay toggle', () => {
 
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /^roleplay$/i });
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const toggle = screen.getByRole('switch', { name: /^roleplay$/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
 
     fireEvent.click(toggle);
 
@@ -201,7 +201,7 @@ describe('PersonaRoleplay — Greeting toggle (disabled when roleplay off)', () 
 
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /^greeting$/i });
+    const toggle = screen.getByRole('switch', { name: /^greeting$/i });
     expect(toggle).toBeDisabled();
     expect(toggle).toHaveAttribute('title', 'Enable Roleplay to set a greeting');
   });
@@ -212,7 +212,7 @@ describe('PersonaRoleplay — Greeting toggle (disabled when roleplay off)', () 
 
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /^greeting$/i });
+    const toggle = screen.getByRole('switch', { name: /^greeting$/i });
     expect(toggle).not.toBeDisabled();
   });
 
@@ -222,7 +222,7 @@ describe('PersonaRoleplay — Greeting toggle (disabled when roleplay off)', () 
 
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
 
-    const toggle = screen.getByRole('button', { name: /^greeting$/i });
+    const toggle = screen.getByRole('switch', { name: /^greeting$/i });
     fireEvent.click(toggle);
 
     await waitFor(() => expect(state.patch).toHaveBeenCalledWith({ greetingEnabled: true }));

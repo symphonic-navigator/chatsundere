@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { AutoSizeTextarea } from '../../components/AutoSizeTextarea.js';
 import { MemoryResponseOverlay } from '../../components/MemoryResponseOverlay.js';
 import { PageScaffold } from '../../components/ui/PageScaffold.js';
+import { Switch } from '../../components/ui/Switch.js';
 import { useHelp } from '../../content/help/use-help.js';
 import {
   useBodyVersions,
@@ -277,27 +278,20 @@ export function PersonaMemory(): JSX.Element {
           {/* Remembering toggle */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm text-paper">Remembering</div>
+              <label htmlFor="persona-remembering-switch" className="block text-sm text-paper">
+                Remembering
+              </label>
               <p className="text-[11px] text-paper-soft">
                 Applies to all chats with {persona.name}. When on, this persona builds a memory of
                 you and your conversations.
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Remembering"
-              aria-pressed={persona.useMemory}
-              onClick={() => void patch({ useMemory: !persona.useMemory })}
-              className={`h-6 w-12 shrink-0 rounded-full border ${
-                persona.useMemory ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
-              }`}
-            >
-              <span
-                className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
-                  persona.useMemory ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            <Switch
+              id="persona-remembering-switch"
+              ariaLabel="Remembering"
+              checked={persona.useMemory ?? false}
+              onChange={() => void patch({ useMemory: !persona.useMemory })}
+            />
           </div>
 
           {/* Memory instructions (blur-save) */}

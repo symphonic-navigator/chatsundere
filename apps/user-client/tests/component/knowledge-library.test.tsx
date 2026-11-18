@@ -68,7 +68,7 @@ describe('KnowledgeLibraryPage', () => {
   it('disables the NSFW toggle with a reason in SFW mode', () => {
     adultMock.mockReturnValue({ mode: 'sfw' });
     wrapAt('/app/knowledge/a');
-    expect(screen.getByRole('button', { name: /adult library/i })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /adult library/i })).toBeDisabled();
     expect(screen.getByText(/switch to nsfw mode/i)).toBeInTheDocument();
   });
 });
