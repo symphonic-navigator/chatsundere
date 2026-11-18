@@ -13,6 +13,8 @@ export type PendingSignInSummary = {
   isNewServer: boolean;
   /** The draft's name for a new server; empty for a reconnect, whose row has one. */
   name: string;
+  /** The draft's link for a new server, which the connector card matches; absent for a reconnect. */
+  url?: string;
   createdAt: number;
 };
 
@@ -37,6 +39,7 @@ export async function listPendingSignIns(
           serverId: p.serverId,
           isNewServer: p.isNewServer,
           name: p.draft?.name ?? '',
+          ...(p.draft ? { url: p.draft.url } : {}),
           createdAt: row.createdAt,
         });
       } catch {

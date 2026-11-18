@@ -6,6 +6,7 @@ import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
 import { McpRedirectNotice, readMcpRedirectNotice } from '../mcp/McpRedirectNotice.js';
 import { ArtefactPill } from './ArtefactPill.js';
 import { CondensationSlot, hasVisibleSummary } from './CondensationSlot.js';
+import { ConnectorPill } from './ConnectorPill.js';
 import { ExpertPill } from './ExpertPill.js';
 import { ImagePill } from './ImagePill.js';
 import { VisionPill } from './VisionPill.js';
@@ -83,6 +84,11 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
       toolName === 'inspect_artefact')
   ) {
     return <ArtefactPill row={row} />;
+  }
+
+  if (row.kind === 'tool-call' && toolName === 'add_mcp_connector') {
+    // A block of its own, like the image pill; it renders nothing for a refusal without a card.
+    return <ConnectorPill row={row} />;
   }
 
   if (
