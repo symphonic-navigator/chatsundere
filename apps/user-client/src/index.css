@@ -102,8 +102,10 @@ body {
    Below the lg breakpoint (every phone, and tablets per our "tablets are phones"
    rule) we pin every text-entry control to 16px so focusing never triggers a
    zoom — the composer (15.2px) and Settings textareas were the worst offenders.
-   Pairs with maximum-scale=1 in the viewport meta as defence in depth; font-size
-   has no visual effect on checkbox/radio/range, so the broad selector is safe. */
+   This rule is the sole guard: the viewport meta no longer carries
+   maximum-scale=1, because that also blocked pinch-zoom (thumb pass, 0.5.0).
+   Font-size has no visual effect on checkbox/radio/range, so the broad selector
+   is safe. */
 @media (max-width: 1023px) {
   input,
   textarea,
@@ -4944,6 +4946,9 @@ h1 {
   color: var(--color-paper);
   cursor: pointer;
   transition: filter 0.15s ease, background 0.15s ease;
+  /* 44 px thumb target; the padding alone came to 43. A <button> centres its
+     content vertically, so the text stays in the middle. */
+  min-height: 2.75rem;
 }
 .cs-btn:disabled {
   opacity: 0.45;
@@ -5077,8 +5082,11 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  /* 44 × 44 thumb target; the negative margin keeps the layout of the old
+     32 px box, so the glyph stays where it was and only the hover halo grows. */
+  width: 44px;
+  height: 44px;
+  margin: -6px;
   border-radius: var(--radius-pill);
   background: transparent;
   border: 1px solid transparent;
@@ -5255,6 +5263,8 @@ h1 {
   text-align: center;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
+  /* Invisible 44 px hit area on ::before, see the thumb-pass block. */
+  position: relative;
 }
 .cs-seg[data-active] {
   background: rgba(255, 255, 255, 0.06);
@@ -5370,7 +5380,14 @@ h1 {
 .cs-pagebar-crumb {
   background: none;
   border: none;
-  padding: 4px 2px;
+  /* 44 px thumb target by padding, not a pseudo-element: the crumbs row clips.
+     The height is real (the row grows to 44, the height of the back and help
+     buttons beside it, so nothing moves); the extra 6 px each side is cancelled
+     by the negative margin, so the text keeps its place and the grown area ends
+     at the separators. */
+  min-height: 44px;
+  padding: 4px 8px;
+  margin-inline: -6px;
   color: var(--color-paper-soft);
   font-size: 14px;
   cursor: pointer;
@@ -5761,4 +5778,182 @@ h1 {
   .chat-quick-menu-card {
     animation: none;
   }
+}
+
+/* ── Thumb pass (0.5.0) ── */
+/* Hit areas of at least 44 × 44 px (Apple's guidance, WCAG 2.5.5) without
+   changing what is painted. Spec:
+   superpowers/specs/2026-11-18-voice-on-the-go-and-thumb-pass-design.md, Part B.
+
+   .cs-hit / .cs-hit-after: an invisible, absolutely positioned pseudo-element,
+   centred on the host and max(100%, 44px) on each side. A tap on a
+   pseudo-element is a tap on its host, so clicks and focus are unchanged, and
+   nothing in the layout moves. The host needs a containing block: the
+   `position: relative` below sits in the components layer, so any host that is
+   already positioned (an unlayered rule, or a Tailwind `absolute`/`fixed`/
+   `sticky` utility, both of which outrank the layer) keeps its own position and
+   still contains the pseudo-element. Use .cs-hit-after where the host's ::before
+   is already taken. The pseudo-element is hit-tested above in-flow neighbours, so
+   where controls sit closer than 44 apart the hit area must stop at half the gap:
+   check with scripts/touch-targets.mjs, whose overlap check is the arbiter.
+
+   .cs-hit-pad: the same effect by padding with an equal negative margin, for
+   hosts whose pseudo-elements are both taken or whose parent clips
+   (overflow: hidden). Only for hosts that paint no box, since the padding is
+   inside any background or border. It replaces the host's padding: set
+   --cs-hit-base-x/-y to the padding the host had, and --cs-hit-grow-x/-y so that
+   content + 2 × (base + grow) reaches 44. */
+@layer components {
+  .cs-hit,
+  .cs-hit-after,
+  .cs-setup-step,
+  .artefact-picker-close,
+  .document-picker-close,
+  .treasury-sheet-close,
+  .lightbox-x,
+  button[aria-label^="Connectivity:"] {
+    position: relative;
+  }
+}
+
+.cs-hit::before,
+.cs-hit-after::after,
+.cs-seg::before,
+.cs-setup-step::before,
+a.brand-logo::before,
+.adult-mode-toggle::after,
+button[aria-label^="Connectivity:"]::before,
+.artefact-picker-close::before,
+.document-picker-close::before,
+.treasury-sheet-close::before,
+.lightbox-x::before {
+  content: "";
+  position: absolute;
+  /* Centred: a negative offset of half the growth, never a positive one. */
+  top: min(0px, calc((100% - 44px) / 2));
+  left: min(0px, calc((100% - 44px) / 2));
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}
+
+.cs-hit-pad {
+  --cs-hit-grow-x: 8px;
+  --cs-hit-grow-y: 8px;
+  padding-block: calc(var(--cs-hit-base-y, 0px) + var(--cs-hit-grow-y));
+  padding-inline: calc(var(--cs-hit-base-x, 0px) + var(--cs-hit-grow-x));
+  margin-block: calc(-1 * var(--cs-hit-grow-y));
+  margin-inline: calc(-1 * var(--cs-hit-grow-x));
+}
+
+/* Setup steps stack 4 px apart, so between two steps each hit area takes just
+   under half the gap (1.5 px, leaving a clear pixel); only the outer edges of
+   the first and last step grow the full way to 44, over the card's own
+   non-interactive text and padding. */
+.cs-setup-step::before {
+  top: -1.5px;
+  bottom: -1.5px;
+  height: auto;
+}
+.cs-setup-step:first-child::before {
+  top: min(-1.5px, calc((100% - 44px) / 2));
+}
+.cs-setup-step:last-child::before {
+  bottom: min(-1.5px, calc((100% - 44px) / 2));
+}
+
+/* Sheet closes sit in a header above the sheet's next row (the type tabs in the
+   pickers, 0.7rem away, whose own hit area reaches 3 px out): the hit area grows
+   upwards into the sheet's padding and only 4 px down. */
+.artefact-picker-close::before,
+.document-picker-close::before,
+.treasury-sheet-close::before {
+  top: auto;
+  bottom: -4px;
+}
+
+/* The lightbox × sits in the top-right corner of a clipping panel, 0.5rem from
+   the file name and from the action row: up and right it grows into the
+   panel's padding, towards its neighbours by half the gap. */
+.lightbox-x::before {
+  inset: -8px -9px -4px -4px;
+  width: auto;
+  height: auto;
+}
+
+/* The adult-mode pill clipped its shimmer with overflow: hidden, which would
+   clip a hit area too. The shimmer now sweeps a background inside the pill's
+   own box instead of a translated pseudo-element, so the clip can go: a 320 %
+   wide gradient moved from 100 % to 0 % reproduces the translateX(-110%) →
+   translateX(110%) sweep (keyframes mapped p = (1.1 − t) / 2.2), and the band's
+   stops are rescaled from 30/50/70 % to the wider image. ::after carries the
+   hit area. */
+.adult-mode-toggle {
+  overflow: visible;
+}
+.adult-mode-toggle::before {
+  border-radius: inherit;
+  background: linear-gradient(
+      100deg,
+      transparent 43.75%,
+      rgba(255, 255, 255, 0.18) 50%,
+      transparent 56.25%
+    )
+    100% 0 / 320% 100% no-repeat;
+  transform: none;
+}
+.adult-mode-toggle-nsfw::before {
+  animation-name: pill-shimmer-sweep;
+}
+.adult-mode-toggle-sfw::before {
+  animation-name: pill-shimmer-sweep;
+}
+@keyframes pill-shimmer-sweep {
+  0%,
+  85% {
+    background-position: 100% 0;
+  }
+  92% {
+    background-position: 50% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adult-mode-toggle-nsfw::before,
+  .adult-mode-toggle-sfw::before {
+    animation: none;
+  }
+}
+
+/* In a message's control row the buttons sit 0.25rem apart and the row wraps,
+   so the ⋯ trigger takes half of that gap on every side: 36 × 36. */
+.msg-controls .cs-overflow-trigger {
+  width: 36px;
+  height: 36px;
+  margin: -2px;
+}
+
+/* The first crumb's 6 px of extra width reaches left of the crumbs row, which
+   clips. The row borrows that much of the 8 px gap to the back button as
+   padding, so its content box (and the current crumb's ellipsis) is unchanged.
+   Nothing is borrowed on the right: the row ends 8 px before the help button,
+   and a crumb that overflows is clipped there, hit area included. */
+.cs-pagebar-crumbs {
+  padding-inline-start: 6px;
+  margin-inline-start: -6px;
+}
+
+/* Range sliders: a 44 px tall box with the growth cancelled by the margin, so
+   the track (drawn centred in the box) and the layout stay where they were.
+   Chromium and WebKit draw the default range 16 px tall: (44 − 16) / 2 = 14. */
+input[type="range"] {
+  min-height: 44px;
+  margin-block: -14px;
+}
+
+/* Pinch-zoom stays (the viewport meta no longer blocks it); double-tap-to-zoom
+   goes, so fast repeated taps on the composer or Skip never zoom by accident. */
+html {
+  touch-action: manipulation;
 }
