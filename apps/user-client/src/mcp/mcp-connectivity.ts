@@ -20,10 +20,19 @@ export function buildCandidates(
   hasProxy: boolean,
   allowDirect: boolean,
 ): McpCandidate[] {
-  const trimmed = url.replace(/\/+$/, '');
-  const variants = trimmed.endsWith('/mcp') ? [trimmed] : [trimmed, `${trimmed}/mcp`];
+  const variants = linkVariants(url);
   const routings = routingsFor(hasProxy, allowDirect);
   return routings.flatMap((routing) => variants.map((u) => ({ routing, url: u })));
+}
+
+/**
+ * The URLs a check probes for a link, in order: the link without trailing slashes, then
+ * its `/mcp` variant unless it already ends in `/mcp`. Shared with `findServerForLink`,
+ * so "already added" and the check cannot disagree.
+ */
+export function linkVariants(url: string): string[] {
+  const trimmed = url.replace(/\/+$/, '');
+  return trimmed.endsWith('/mcp') ? [trimmed] : [trimmed, `${trimmed}/mcp`];
 }
 
 function routingsFor(hasProxy: boolean, allowDirect: boolean): McpRouting[] {
