@@ -845,3 +845,31 @@ All five hard defects (H1 to H5) and the softs S2, S3, S6, S8, S9, S10, S12 to S
 - **Rationale for deferral:** all are above WCAG 2.5.8's 24 px floor, none overlaps, and (1) is a look decision for Chris; (3) degrades to today's behaviour with in-app controls working.
 - **Follow-up commitment:** (1) Chris decides on his device during the 0.5.0 manual verification; (3) keep the read-aloud sink above the new-chat remount after 0.5.0 if step 14 shows it on iOS; (2) and (4) are the starting list of the next thumb sweep.
 - **Chris sign-off:** not required (no blocking hard defect deferred).
+
+## 2026-11-18 — 0.5.0 units: what they resolved, and the softs they deferred
+
+Seven units were built in parallel sessions and merged to `master` on 2026-11-18 (#56, #57, #58, #59, #60, #61, #62, #65). Laura ran a spec-pass and a pre-squash pass on each unit that changes a flow. No hard defect is deferred. The voice and thumb pass unit wrote its own entry (above).
+
+**Resolved by these units (earlier entries of this file):**
+
+- **2026-07-14, memory page `no-credentials`:** *Enter passphrase* beside Retry, and a locked key gets *Re-enter key* (#58).
+- **2026-11-03, MCP sign-in S1, S4, S7, S11:** the overlay waits behind an approval, *Sign in again* resumes a waiting sign-in, *Link a server* exists for local-only accounts, the Add-server draft survives Back (#58).
+- **2026-10-07, hub "My Circle" crumb follows `?return=`:** the crumb always means My Circle; `‹` goes where the user came from (#61).
+- **2026-10-09, the router-blocker entry (dirty guard):** `‹` now equals the system Back everywhere except on a dirty page, where only `‹` asks. Laura's better route for the follow-up: keep the draft on unmount (restore it on return, or save as you go), which removes the need for a blocker.
+- **The 2026-11-18 holistic sweep's hard defects:** Back meaning two things (#61), the always-0 journal pill and the misdirecting "Settings → Voice" (#58).
+
+**Deferred, all soft:**
+
+- **Affected flow / surface:** chat search (#56); Back (#61); the MCP connector card (#62).
+- **Findings (Laura's summaries):**
+  1. *Search:* if the installed PWA is killed and relaunched in a chat opened from a hit, the quick menu's History opens a fresh visit (the return target is memory-only). System Back still restores everything from `history.state`; a reload is covered since #61.
+  2. *Back with an open overlay* leaves the page instead of closing the overlay; with the chat's quick menu open, Android Back leaves the chat.
+  3. *Bookmarks "jump to message"* pushes a second copy of the chat.
+  4. *A new recovery key from My Account* is not held by the recovery-key rule.
+  5. *The iOS edge swipe* plays its own animation and then the zoom collapse (existing behaviour).
+  6. *Connector card:* after a PWA reload during the sign-in window the user lands on the server's detail page, not in the chat; and "Added · off for <persona>" opens the server although the Off override lives in the persona editor.
+- **Mode:** pre-squash.
+- **Criterion:** least astonishment; the chat at the centre.
+- **Rationale for deferral:** none is a dead end; (2) touches every overlay and is its own design (Chris deferred it as Q3 of the Back spec); (6, first part) was accepted by Chris for 0.5.0 as Q5 of the connector spec.
+- **Follow-up commitment:** rows in [[follow-ups-index]]; (1) is decided by Chris's device test of the search spec's step 7; (2) starts with the quick menu.
+- **Chris sign-off:** not required (soft); (2) and (6) were his decisions at spec time.

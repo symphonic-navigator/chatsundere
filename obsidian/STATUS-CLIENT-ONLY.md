@@ -8,6 +8,56 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-18 — **0.5.0: ALL UNITS ON `master`, NOT TAGGED, AWAITING CHRIS'S DEVICE
+TESTS.** Decided by Chris on 2026-11-18: 0.5.0 is the last large release before the Eidolon
+integration and has to carry users for a long time; after it only bug fixes and new models follow.
+So it stays out of what Eidolon rebuilds (Projects, memory, knowledge editing, the tool loop).
+- **How it was built:** seven parallel cloud sessions, one unit each, coordinated from an eighth
+  that reviewed every spec and merged; Chris approved each spec. Two phases per unit: spec with
+  Laura's pass, stop for approval, then plan, test-first build, reviews, gates. Analysis and
+  decisions: Kumbu² `/SWE/Chatsundere/Ideas/` (two notes of 2026-11-18) and
+  `/SWE/Chatsundere/Memory/release-0.5.0.md`.
+- **What is on `master`** (specs under `superpowers/specs/2026-11-18-*`):
+  - **#58 papercuts:** repair links lead to the right place and come home; no silent send
+    failure; four MCP sign-in snags; trash purges without a server; privacy notes name what the
+    helper's provider sees.
+  - **#56 search inside chats:** one History field for titles and messages, a streamed scan that
+    never reads a hidden persona's chats, the query kept out of the URL and out of storage.
+  - **#60 passkey unlock keeps the master key:** found by the papercut session and reproduced in
+    a test: a passkey unlock left no MK, so sending, memory, keys, voice and sync stopped.
+    Larissa-gated; her diff pass found and fixed a High.
+  - **#57 a sense of time, chat export, reduce animations:** per-message `<sent>` stamps on the
+    wire (cache-stable, a switch per persona), `.md` export, a switch that mirrors the system's
+    reduced motion.
+  - **#61 Back means one thing:** `‹` goes where you came from, crumbs go up; sign-out, the end
+    of the first run and the adult switch clear the way back; the recovery key cannot be lost
+    with Back; an adult chat is never drawn in SFW.
+  - **#62 add an MCP connector from the chat:** a tool that only proposes, a card with the full
+    link, the existing guided flow prefilled; only a link the user wrote is accepted; MCP
+    requests refuse redirects.
+  - **#59, #65 voice on the go and the thumb pass:** screen wake lock, lock-screen controls for
+    read-aloud behind `READ_ALOUD_MEDIA_BRIDGE`, 44 px hit areas, a `Switch` primitive,
+    pinch-zoom, the safe area.
+  - **#63, #64:** two test fixes.
+- **Prompt-cache consistency** was a review criterion of every spec (Chris, 2026-11-18). Only #57
+  and #62 change what is sent to a provider, each once per chat at the update, never per turn.
+- **Gates:** each PR was merged on green CI at a head that contained the then-current `master`.
+  `master` was red for about a quarter of an hour after #60 (a #56 test opened a session
+  without a master key; fixed by #64).
+- **Open, see [[insights/follow-ups-index]] and `superpowers/open-items.md`:** every unit's
+  manual verification; the bridge's listening check; the imitation probe for the stamps; the
+  `transaction-guard` test's timing race; the Garage migration (guided).
+- **Process decisions to write down at the release** (Chris, 2026-11-18): no `maintenance/0.5`,
+  0.5.x stays on `master` and Eidolon gets its own branch; CLAUDE.md §10 states the discipline
+  itself instead of naming the superpowers skills (the two sessions that reported on it
+  could not load the plugin; the other five were not checked).
+- **Server side:** nothing changed in the services; see [[STATUS-BACKEND]].
+
+**Next:** Chris deploys `master` to staging and device-tests. Then the Garage migration, the
+release notes from the Kumbu² diary `0.5.0.md`, and the tag (Chris pushes it).
+
+---
+
 **Last updated:** 2026-11-17 (evening) — **v0.4.1 RELEASED.** `v0.4.1` (on `927845a4`, the
 squash of #52) ships prior-turn attachment replay: prior user turns still in the replayed
 history carry their attachments again (text in full, images of the last 3 image-bearing turns

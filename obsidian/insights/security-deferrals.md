@@ -1013,3 +1013,23 @@ Residuals found by the fix-wave re-review, also deferred:
   - L2: a `providerConfigFrom(definition, routing)` helper used at every call site, plus chat resolution refusing `shape: 'none'`, before the first header-scheme chat provider and v0.4.0 at the latest.
   - I5: decide with the ElevenLabs step 3 (via nano-gpt).
   - I7: next voice-logging touch.
+
+## 2026-11-18 — 0.5.0 units (Larissa passes on the passkey fix, the papercuts and the MCP connector)
+
+- **Affected paths:** `packages/crypto/src/flows/login-biometric.ts`, `packages/ui-shared/src/state/session.store.ts`, `apps/user-client/src/{boot/activate-session.ts,routes/login/**,routes/onboarding/invitation/confirm.tsx,data/send-*.ts,memory/resolve-args.ts,trash/purge.ts,mcp/**,tools/**}`.
+- **The fault that was fixed (#60):** a passkey unlock from a cold start activated the session without the raw master key, so sending, memory actions, saving a provider key, voice and, for a linked account, the whole sync engine stopped; sync stopped silently. Reproduced in a test before the fix. Decided by Chris on 2026-11-18: the small fix, the passkey path hands the MK to the store as the passphrase path already does. Larissa: "The small fix creates no new kind of exposure."
+- **Fixed before squash:**
+  - *#60, design pass (CLEAR WITH CHANGES):* F1 (medium) late link never proved the typed passphrase against the local account, so a typo would have split the account; F2 (medium) the late-link store update could revive a closed session; F3 (low) a failed `activateSession` left its session unclosed.
+  - *#60, diff pass (then CLEAR TO SQUASH):* **H1 (high)** a sign-out during `linkToServer` zeroed the store's buffer in place, so a wrap of all zeros would have gone to the server; `linkToServer` now wraps the passphrase proof's own MK. M1 (medium) a real typo throws `integrity_check_failed`, which was not mapped. L1 (low), I2 (info).
+  - *#58, short read of items 7, 9, 10 (clean to squash):* L2 the interrupted-reply Retry resolved too little before deleting; L3 privacy wording.
+  - *#62 (CLEAR with changes):* M1 a link smuggling conversation content could be checked with one tap; the tool now accepts only a link the user wrote in this chat. M2 direct uncredentialed MCP requests followed redirects; every MCP request now refuses them (`McpRedirectError`), which **closes L2 of 2026-11-02**. L1 a refused injected link showed a Failed card.
+- **Closed from earlier entries:** Tool-replay L-3 and the copy part of Summaries M-2 (2026-10-08): the privacy notes and the helper copy name what reaches the helper's provider (#58). Still open from M-2: the persona-bundle fallback when the helper's privacy class is weaker.
+- **Deferred:**
+  - **F4 of #60 and L1 of #58, one finding (low): a re-unlock over an active session replaces the old `MasterKeySession` without `close()`,** and for a linked account runs a second OPAQUE login. The old MK stays unzeroed until garbage collection. **Warning from Larissa for whoever fixes it: no naive `close()` in `activateSession` or `setSession`.** The closure's buffer is the same object as the store's `mk`; zeroing it would zero the live MK, and sealing would then silently produce blobs under a key derived from all zeros. Safe shapes: separate MK copies for session and store, or close only the previous session, only when a new `mk` was supplied, compared by `id`, after in-flight work has settled. The invariant #60 wrote into the JSDoc: once a session has reached the store, only `closeAndForget()` may close it.
+  - **Custody (existing row):** the passkey path now also returns the raw MK; the existing copies (`mcp/oauth/ensure-token.ts`, `login-online-linked.ts`) run on it too. Optional hygiene: `linkToServer` takes an entry-time copy of `mk` and zeroes it afterwards.
+  - **I1 (info, accepted, #62):** the tool's "already exists" answer is one bit of device state, for links the user wrote. **I5 (info, accepted, #62):** without a proxy the check contacts a user-written public name directly from the browser; it may resolve to a private address; the CORS preflight mitigates.
+  - **Info (#58):** other secrets still opened with plain `openSecret` (background helper, image slots) raise a raw `OperationError` on their old path; generic, no leak.
+- **Severity:** low and info; no critical, high or medium deferred.
+- **Rationale for deferral:** no ordinary flow reaches `/login` with a session open, and the fix belongs to the MK custody work.
+- **Follow-up commitment:** with "Tighten crypto MK custody" ([[follow-ups-index]]).
+- **Chris sign-off:** not required (low and info). The passkey fix's scope, the small fix over the thorough one, was his decision.
