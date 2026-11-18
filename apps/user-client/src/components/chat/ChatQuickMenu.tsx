@@ -23,7 +23,21 @@ export interface ChatQuickMenuProps {
   /** Leave to the Entrance Hall (resets interaction mode first). */
   onEntranceHall: () => void;
   onNavigate: (to: string) => void;
+  /** Export chat: `empty` and `preparing` disable it, `streaming` adds a note. */
+  exportState: ChatExportState;
+  /** Builds and delivers the file synchronously, inside the tap (iOS share). */
+  onExport: () => void;
 }
+
+/** Whether the chat can be exported right now, and how the entry says so. */
+export type ChatExportState = 'empty' | 'preparing' | 'ready' | 'streaming';
+
+const EXPORT_NOTES: Record<ChatExportState, string | undefined> = {
+  empty: 'Nothing to export yet',
+  preparing: 'Preparing…',
+  ready: undefined,
+  streaming: 'The reply in progress is left out',
+};
 
 interface Entry {
   key: string;
@@ -165,6 +179,18 @@ export function ChatQuickMenu(p: ChatQuickMenuProps): JSX.Element | null {
       },
     ],
     personaEntries,
+    [
+      {
+        key: 'export',
+        label: 'Export chat',
+        note: EXPORT_NOTES[p.exportState],
+        disabled: p.exportState === 'empty' || p.exportState === 'preparing',
+        run: () => {
+          onClose();
+          p.onExport();
+        },
+      },
+    ],
     [
       {
         key: 'images',

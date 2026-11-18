@@ -73,6 +73,7 @@ import { useStreamManagerStore } from '../../../state/stream-manager.store.js';
 import { toastStore } from '../../../state/toast.store.js';
 import { mutateSynced } from '../../../sync/enqueue.js';
 import { useClass2Gate } from '../../../sync/gate.js';
+import { useChatExport } from './use-chat-export.js';
 import { useComposerDraft } from './use-composer-draft.js';
 import { buildEditOrchestration, resolveSendAction } from './use-edit-orchestration.js';
 
@@ -358,6 +359,14 @@ export function ChatPage(): JSX.Element {
   const diagnosticsReport = useStreamManagerStore((s) =>
     activeChatId ? (s.diagnostics.get(activeChatId) ?? null) : null,
   );
+  const chatExport = useChatExport({
+    open: quickMenuAnchor !== null,
+    chatId: activeChatId,
+    personaName: effectivePersona?.name ?? null,
+    // The file names the user "You" without a display name (spec B2), not by username.
+    userName: settingsQuery.data?.displayName ?? '',
+    streamingMessageId: streamHandle?.draftMessageId ?? null,
+  });
   const [diagOpen, setDiagOpen] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeChatId is the intentional trigger — closing a stale diagnostics overlay when the chat changes
   useEffect(() => {
@@ -1254,6 +1263,8 @@ export function ChatPage(): JSX.Element {
         onClose={closeQuickMenu}
         onEntranceHall={onExitToEntranceHall}
         onNavigate={(to) => navigate(to)}
+        exportState={chatExport.exportState}
+        onExport={chatExport.onExport}
       />
     </div>
   );

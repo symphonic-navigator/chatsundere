@@ -59,7 +59,7 @@ const dayHeading = (d: Date): string =>
   `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 
 /** The title as the file states it: the chat's own, or "Chat with {persona}". */
-function titleOf(chat: ChatExportInput['chat'], personaName: string): string {
+export function chatExportTitle(chat: ChatExportInput['chat'], personaName: string): string {
   const own = chat.title?.replace(/\s+/g, ' ').trim();
   return own ? own : `Chat with ${personaName}`;
 }
@@ -131,7 +131,7 @@ export function chatExportStartedAt(input: Pick<ChatExportInput, 'chat' | 'messa
  * a closing note. Times are the device's local time.
  */
 export function chatToMarkdown(input: ChatExportInput): string {
-  const title = titleOf(input.chat, input.personaName);
+  const title = chatExportTitle(input.chat, input.personaName);
   const userName = input.userName.trim() || 'You';
   const started = new Date(chatExportStartedAt(input));
   const exported = new Date(input.exportedAt);
