@@ -15,7 +15,9 @@ import { SyncSurfaceHost } from '../components/SyncSurfaceHost.js';
 import { Toast } from '../components/Toast.js';
 import { anchorFrom } from '../components/chat/ChatQuickMenu.js';
 import { ScreenEffectsOverlay } from '../components/effects/ScreenEffectsOverlay.js';
+import { useSettings } from '../data/settings.js';
 import { copy } from '../lib/copy.js';
+import { applyMotionAttribute, prefersReducedMotion } from '../lib/reduced-motion.js';
 import { useBootStore } from '../state/boot.store.js';
 import { useCurrentChatStore } from '../state/current-chat.store.js';
 import { useEffectiveChatMode } from '../state/effective-chat-mode.js';
@@ -77,6 +79,15 @@ export function Root() {
     return () => document.body.classList.remove('dim-ambient');
   }, []);
 
+  // The "Reduce animations" switch (My Settings › You) reaches the CSS and the
+  // motion helpers through one root attribute. Undefined while the settings row
+  // loads: the first-paint mirror applied in main.tsx stands until then.
+  const animationsEnabled = useSettings().data?.animationsEnabled;
+  useEffect(() => {
+    if (animationsEnabled === undefined) return;
+    applyMotionAttribute(!animationsEnabled);
+  }, [animationsEnabled]);
+
   const showRolledBackBanner =
     phase.kind === 'ready' && phase.staging.kind === 'rolled_back' && !dismissed;
 
@@ -89,7 +100,7 @@ export function Root() {
     // (no splash this session, or reduced motion).
     if (typeof window === 'undefined') return true;
     if (sessionStorage.getItem('splashShown') !== null) return true;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    if (prefersReducedMotion()) return true;
     return false;
   });
 
