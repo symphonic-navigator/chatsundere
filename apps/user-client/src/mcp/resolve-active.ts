@@ -67,6 +67,16 @@ function reachable(s: McpServerRow, hasProxy: boolean): boolean {
   return canResolveOnFirstUse(s, hasProxy);
 }
 
+/** Whether a server is on for a persona, reachability aside: enabled, and on by default-or-override. */
+export function isOnForPersona(
+  row: Pick<McpServerRow, 'id' | 'enabled' | 'onByDefault'>,
+  overrides: Readonly<Record<string, 'on' | 'off'>>,
+): boolean {
+  if (!row.enabled) return false;
+  const ov = overrides[row.id];
+  return ov ? ov === 'on' : row.onByDefault;
+}
+
 /** The servers active for a persona this send: enabled, reachable from this
  *  device, and on by default-or-override. */
 export function resolveActiveServers(
@@ -74,10 +84,5 @@ export function resolveActiveServers(
   overrides: Record<string, 'on' | 'off'>,
   hasProxy: boolean,
 ): McpServerRow[] {
-  return servers.filter((s) => {
-    if (!s.enabled) return false;
-    if (!reachable(s, hasProxy)) return false;
-    const ov = overrides[s.id];
-    return ov ? ov === 'on' : s.onByDefault;
-  });
+  return servers.filter((s) => isOnForPersona(s, overrides) && reachable(s, hasProxy));
 }

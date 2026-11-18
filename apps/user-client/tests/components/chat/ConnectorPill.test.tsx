@@ -6,11 +6,12 @@ import type { McpServerRow, PillRow } from '../../../src/boot/client-data-db.js'
 import { ConnectorPill } from '../../../src/components/chat/ConnectorPill.js';
 import { Pill } from '../../../src/components/chat/Pill.js';
 import type { PendingSignInSummary } from '../../../src/data/mcp-oauth-pending.js';
+import { CONNECTOR_CAP } from '../../../src/tools/add-mcp-connector.js';
 
 const m = vi.hoisted(() => ({
   servers: [] as Partial<McpServerRow>[],
   pending: [] as PendingSignInSummary[],
-  chatId: 'chat 1/x' as string | null | undefined,
+  personaIds: [] as (string | null)[],
   persona: { id: 'per1', name: 'Mira', mcpOverrides: {} as Record<string, 'on' | 'off'> } as {
     id: string;
     name: string;
@@ -26,15 +27,17 @@ vi.mock('../../../src/data/mcp-oauth-pending.js', () => ({
   usePendingSignIns: () => ({ data: m.pending }),
 }));
 vi.mock('../../../src/data/chats.js', () => ({
-  useChat: (id: string | null) => ({
-    data: id ? { chat: { id, personaId: 'per1' }, messages: [], pills: [] } : null,
-  }),
+  useChat: () => {
+    throw new Error('the card must not read the chat');
+  },
 }));
 vi.mock('../../../src/data/personas.js', () => ({
-  usePersona: () => ({ data: m.persona }),
+  usePersona: (id: string | null) => {
+    m.personaIds.push(id);
+    return { data: id !== null && id === m.persona?.id ? m.persona : null };
+  },
 }));
 vi.mock('../../../src/data/connector-pill.js', () => ({
-  useMessageChatId: () => ({ data: m.chatId }),
   dismissConnectorPill: (id: string) => m.dismiss(id),
 }));
 
@@ -64,12 +67,12 @@ function proposed(extra: Record<string, unknown> = {}, url: unknown = LINK): Pil
   });
 }
 
-function refused(rawUrl: unknown): PillRow {
+function refused(rawUrl: unknown, error = 'Not proposed'): PillRow {
   return pill(
     {
       name: 'add_mcp_connector',
       argumentsJson: JSON.stringify({ url: rawUrl }),
-      error: 'Not proposed',
+      error,
     },
     'failed',
   );
@@ -96,13 +99,25 @@ function Probe(): JSX.Element {
   );
 }
 
-function renderCard(row: PillRow, via: 'pill' | 'card' = 'card') {
+type Where = { chatId?: string | null; personaId?: string | null };
+
+function renderCard(
+  row: PillRow,
+  via: 'pill' | 'card' = 'card',
+  at: Where = { chatId: 'chat 1/x', personaId: 'per1' },
+) {
   return render(
-    <MemoryRouter initialEntries={[CHAT_PATH]}>
+    <MemoryRouter initialEntries={['/app/chat/elsewhere']}>
       <Routes>
         <Route
           path="/app/chat/:chatId"
-          element={via === 'pill' ? <Pill row={row} /> : <ConnectorPill row={row} />}
+          element={
+            via === 'pill' ? (
+              <Pill row={row} chatId={at.chatId} personaId={at.personaId} />
+            ) : (
+              <ConnectorPill row={row} chatId={at.chatId} personaId={at.personaId} />
+            )
+          }
         />
         <Route path="*" element={<Probe />} />
       </Routes>
@@ -121,7 +136,7 @@ function where(): string {
 beforeEach(() => {
   m.servers = [];
   m.pending = [];
-  m.chatId = 'chat 1/x';
+  m.personaIds = [];
   m.persona = { id: 'per1', name: 'Mira', mcpOverrides: {} };
   m.dismiss.mockClear();
   useSessionStore.setState({ mk: new Uint8Array(32) } as never);
@@ -213,6 +228,38 @@ describe('ConnectorPill — Needs your passphrase', () => {
   });
 });
 
+describe('ConnectorPill — where it is', () => {
+  it('takes the chat path from the chatId prop and ignores crafted payload fields', () => {
+    renderCard(proposed({ chatId: 'evil', chatPath: '/x', returnTo: '/x' }), 'pill', {
+      chatId: 'chat 2',
+      personaId: 'per1',
+    });
+    fireEvent.click(within(card()).getByRole('button', { name: 'Check & add ↗' }));
+    expect(where()).toBe(
+      `/app/integrations/new?return=${encodeURIComponent(`/app/chat/${encodeURIComponent('chat 2')}`)}`,
+    );
+    expect(where()).not.toContain('evil');
+  });
+
+  it('reads the persona from the personaId prop, never from the chat', () => {
+    m.servers = [server()];
+    m.persona = { id: 'per9', name: 'Ayla', mcpOverrides: { 'srv 1': 'off' } };
+    renderCard(proposed(), 'pill', { chatId: 'chat 1/x', personaId: 'per9' });
+    expect(m.personaIds.every((id) => id === 'per9')).toBe(true);
+    expect(within(card()).getByText('✓ Added as Kumbu · off for Ayla')).toBeInTheDocument();
+  });
+
+  it('disables Check & add without a chat rather than navigating without a return', () => {
+    renderCard(proposed(), 'card', { chatId: null, personaId: 'per1' });
+    expect(within(card()).getByRole('button', { name: 'Check & add ↗' })).toBeDisabled();
+  });
+
+  it('disables Add anyway without a chat', () => {
+    renderCard(proposed({ connectorDismissedAt: 3 }), 'card', {});
+    expect(within(card()).getByRole('button', { name: 'Add anyway ↗' })).toBeDisabled();
+  });
+});
+
 describe('ConnectorPill — Signing in', () => {
   it('shows the sign-in line and continues to the waiting screen with return', () => {
     m.pending = [
@@ -222,7 +269,7 @@ describe('ConnectorPill — Signing in', () => {
         isNewServer: true,
         name: 'Kumbu',
         url: LINK,
-        createdAt: 1,
+        createdAt: Date.now(),
       },
     ];
     renderCard(proposed());
@@ -246,11 +293,27 @@ describe('ConnectorPill — Signing in', () => {
         isNewServer: true,
         name: 'K',
         url: `${base}/mcp`,
-        createdAt: 1,
+        createdAt: Date.now(),
       },
     ];
     renderCard(proposed({}, `${base}/`));
     expect(within(card()).getByText('Signing in to mcp.kumbu.example…')).toBeInTheDocument();
+  });
+
+  it('treats a sign-in older than ten minutes as gone and reads Proposed', () => {
+    m.pending = [
+      {
+        state: 's',
+        serverId: 'n',
+        isNewServer: true,
+        name: 'K',
+        url: LINK,
+        createdAt: Date.now() - 10 * 60_000 - 1,
+      },
+    ];
+    renderCard(proposed());
+    expect(within(card()).queryByText(/Signing in/)).toBeNull();
+    expect(within(card()).getByRole('button', { name: 'Check & add ↗' })).toBeEnabled();
   });
 
   it('ignores a pending sign-in for another link', () => {
@@ -261,7 +324,7 @@ describe('ConnectorPill — Signing in', () => {
         isNewServer: true,
         name: 'K',
         url: 'https://other.example/mcp',
-        createdAt: 1,
+        createdAt: Date.now(),
       },
     ];
     renderCard(proposed());
@@ -283,7 +346,7 @@ describe('ConnectorPill — Added', () => {
   it('beats Not now and Signing in', () => {
     m.servers = [server()];
     m.pending = [
-      { state: 's', serverId: 'n', isNewServer: true, name: 'K', url: LINK, createdAt: 1 },
+      { state: 's', serverId: 'n', isNewServer: true, name: 'K', url: LINK, createdAt: Date.now() },
     ];
     renderCard(proposed({ connectorDismissedAt: 5 }));
     const group = card();
@@ -418,6 +481,12 @@ describe('ConnectorPill — Failed', () => {
   it("shows nothing for a refusal whose link passes the rules (cap, not the user's)", () => {
     const { container } = renderCard(refused(LINK));
     expect(container.querySelector('[role="group"]')).toBeNull();
+  });
+
+  it('shows nothing for a capped call, even when its link breaks the rules', () => {
+    const { container } = renderCard(refused('http://x.example', CONNECTOR_CAP));
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 });
 

@@ -7,7 +7,7 @@ import {
   _resetClientDataDbForTests,
   openClientDataDb,
 } from '../../src/boot/client-data-db';
-import { chatIdOfMessage, dismissConnectorPill } from '../../src/data/connector-pill';
+import { dismissConnectorPill } from '../../src/data/connector-pill';
 import { QK } from '../../src/data/queryKeys';
 import { queryClient } from '../../src/lib/queryClient';
 
@@ -94,18 +94,5 @@ describe('dismissConnectorPill', () => {
     const spy = vi.spyOn(queryClient, 'invalidateQueries');
     await dismissConnectorPill('p1');
     expect(spy).toHaveBeenCalledWith({ queryKey: QK.chat('c1') });
-  });
-});
-
-describe('chatIdOfMessage', () => {
-  it('reads the chat id from the message row', async () => {
-    const db = await openClientDataDb();
-    await db.messages.add(message());
-    expect(await chatIdOfMessage('m1')).toBe('c1');
-  });
-
-  it('is null for a missing message', async () => {
-    await openClientDataDb();
-    expect(await chatIdOfMessage('nope')).toBeNull();
   });
 });

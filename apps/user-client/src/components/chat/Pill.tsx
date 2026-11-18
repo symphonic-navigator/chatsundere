@@ -73,7 +73,19 @@ function codeOf(p: PillPayloadShape | undefined): string | null {
   }
 }
 
-export function Pill({ row }: { row: PillRow }): JSX.Element {
+/**
+ * One pill of a message. `chatId` and `personaId` are where the message is rendered;
+ * only the connector card reads them.
+ */
+export function Pill({
+  row,
+  chatId,
+  personaId,
+}: {
+  row: PillRow;
+  chatId?: string | null;
+  personaId?: string | null;
+}): JSX.Element {
   const [expanded, setExpanded] = useState(false);
 
   const toolName = (row.payload as { name?: string } | undefined)?.name;
@@ -88,7 +100,7 @@ export function Pill({ row }: { row: PillRow }): JSX.Element {
 
   if (row.kind === 'tool-call' && toolName === 'add_mcp_connector') {
     // A block of its own, like the image pill; it renders nothing for a refusal without a card.
-    return <ConnectorPill row={row} />;
+    return <ConnectorPill row={row} chatId={chatId} personaId={personaId} />;
   }
 
   if (

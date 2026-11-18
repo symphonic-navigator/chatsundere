@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { Link, useNavigate } from 'react-router-dom';
-import type { McpServerRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
-import { useChat } from '../../data/chats.js';
-import { dismissConnectorPill, useMessageChatId } from '../../data/connector-pill.js';
+import type { McpServerRow, PillRow } from '../../boot/client-data-db.js';
+import { dismissConnectorPill } from '../../data/connector-pill.js';
 import { type PendingSignInSummary, usePendingSignIns } from '../../data/mcp-oauth-pending.js';
 import { useMcpServers } from '../../data/mcp-servers.js';
 import { usePersona } from '../../data/personas.js';
 import { passphraseLoginPath } from '../../data/send-errors.js';
 import { findServerForLink } from '../../mcp/find-server-for-link.js';
 import { waitingScreenPath } from '../../mcp/oauth/sign-in-session.js';
+import { isOnForPersona } from '../../mcp/resolve-active.js';
+import { CONNECTOR_CAP } from '../../tools/add-mcp-connector.js';
 import {
   type ConnectorLinkRefusal,
   emphasisSplit,
@@ -32,6 +33,9 @@ const FAILED_SENTENCE: Readonly<Record<ConnectorLinkRefusal, string>> = {
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
 
 const LINK_CLASS = 'cs-btn connector-pill-btn';
+
+// A pending sign-in's lifetime, as listPendingSignIns counts it; a cached list can outlive it.
+const SIGN_IN_LIFETIME_MS = 10 * 60_000;
 
 type Derived =
   | { kind: 'hidden' }
@@ -70,6 +74,8 @@ function rawArgumentUrl(argumentsJson: unknown): string | null {
 function derive(payload: Record<string, unknown> | null, status: PillRow['status']): Derived {
   if (status === 'pending') return { kind: 'hidden' };
   if (status === 'failed') {
+    // A capped call never had a card, whatever its link was (§2.4): judged before the link.
+    if (payload?.error === CONNECTOR_CAP) return { kind: 'hidden' };
     const raw = rawArgumentUrl(payload?.argumentsJson);
     if (raw === null) return { kind: 'failed', host: null, reason: 'invalid' };
     const link = normaliseConnectorLink(raw);
@@ -94,21 +100,16 @@ function derive(payload: Record<string, unknown> | null, status: PillRow['status
   return { kind: 'link', url: link.url, host: link.host };
 }
 
-function activeFor(row: McpServerRow, persona: PersonaRow | null | undefined): boolean {
-  if (!row.enabled) return false;
-  const override = record(persona?.mcpOverrides)?.[row.id];
-  if (override === 'on' || override === 'off') return override === 'on';
-  return row.onByDefault;
-}
-
 function signInFor(
   pending: readonly PendingSignInSummary[] | undefined,
   link: string,
+  now: number,
 ): PendingSignInSummary | undefined {
   // `findServerForLink` reads only the URL; the draft's link is what the check resolved.
   return (pending ?? []).find(
     (p) =>
       p.isNewServer &&
+      now - p.createdAt < SIGN_IN_LIFETIME_MS &&
       typeof p.url === 'string' &&
       findServerForLink([{ url: p.url } as McpServerRow], link) !== undefined,
   );
@@ -131,15 +132,24 @@ function Headline({ host }: { host: string | null }): JSX.Element {
   );
 }
 
-/** The card of an add_mcp_connector tool call (add-mcp-connector spec §4). */
-export function ConnectorPill({ row }: { row: PillRow }): JSX.Element | null {
+/**
+ * The card of an add_mcp_connector tool call (add-mcp-connector spec §4). Its chat and
+ * persona come from where the message is rendered, never from the payload.
+ */
+export function ConnectorPill({
+  row,
+  chatId,
+  personaId,
+}: {
+  row: PillRow;
+  chatId?: string | null;
+  personaId?: string | null;
+}): JSX.Element | null {
   const navigate = useNavigate();
   const mk = useSessionStore((s) => s.mk);
   const { data: servers } = useMcpServers();
   const { data: pending } = usePendingSignIns();
-  const { data: chatId } = useMessageChatId(row.messageId);
-  const { data: chat } = useChat(chatId ?? null);
-  const { data: persona } = usePersona(chat?.chat.personaId ?? null);
+  const { data: persona } = usePersona(personaId ?? null);
 
   const payload = record(row.payload);
   const derived = derive(payload, row.status);
@@ -173,11 +183,11 @@ export function ConnectorPill({ row }: { row: PillRow }): JSX.Element | null {
     const match = findServerForLink(servers ?? [], url);
     const dismissedAt = payload?.connectorDismissedAt;
     const dismissed = typeof dismissedAt === 'number' && Number.isFinite(dismissedAt);
-    const signIn = mk ? signInFor(pending, url) : undefined;
+    const signIn = mk ? signInFor(pending, url, Date.now()) : undefined;
     let actions: JSX.Element;
     let line: string | null = null;
     if (match) {
-      line = activeFor(match, persona)
+      line = isOnForPersona(match, persona?.mcpOverrides ?? {})
         ? `✓ Added as ${match.name}`
         : `✓ Added as ${match.name} · off for ${persona?.name ?? 'this persona'}`;
       actions = (
@@ -218,14 +228,19 @@ export function ConnectorPill({ row }: { row: PillRow }): JSX.Element | null {
     } else if (dismissed) {
       line = 'Not now — you can still add it.';
       actions = (
-        <Button className="connector-pill-btn" onClick={propose}>
+        <Button className="connector-pill-btn" onClick={propose} disabled={chatPath === null}>
           Add anyway ↗
         </Button>
       );
     } else {
       actions = (
         <>
-          <Button tone="primary" className="connector-pill-btn" onClick={propose}>
+          <Button
+            tone="primary"
+            className="connector-pill-btn"
+            onClick={propose}
+            disabled={chatPath === null}
+          >
             Check & add ↗
           </Button>
           <Button className="connector-pill-btn" onClick={() => void dismissConnectorPill(row.id)}>
