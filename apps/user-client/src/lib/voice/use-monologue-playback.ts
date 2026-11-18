@@ -46,7 +46,8 @@ export function useMonologuePlayback(
   onStart?: () => void,
 ): MonologuePlayback {
   const sinkRef = useRef<AudioSink | null>(null);
-  if (sinkRef.current === null) sinkRef.current = new AudioSink();
+  // Always direct: the monologue is short, has its own stop pill and no platform controls.
+  if (sinkRef.current === null) sinkRef.current = new AudioSink({ mediaElementBridge: false });
   const abortRef = useRef<AbortController | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [disabledReason, setDisabledReason] = useState<'no-voice' | null>(null);

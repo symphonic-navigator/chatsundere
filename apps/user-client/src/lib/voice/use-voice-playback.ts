@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MessageRow, PersonaRow } from '../../boot/client-data-db.js';
 import { useSettings } from '../../data/settings.js';
 import { type StreamHandle, useStreamManagerStore } from '../../state/stream-manager.store.js';
-import { AudioSink } from './audio-sink.js';
+import { AudioSink, type ReadPhase, isReadAloudBridgeEnabled } from './audio-sink.js';
 import { committedSegments } from './committed-prefix.js';
 import { type TtsResolution, type TtsUnavailableReason, resolveTts } from './resolve-tts.js';
 import { clearPosition, peekPosition, rememberPosition } from './resume-memory.js';
@@ -59,6 +59,16 @@ export interface VoicePlayback {
    *  synthetic wave during the initial synthesis (transport is 'speaking' before
    *  audio sounds) rather than a flat empty FFT. */
   getIsAudible: () => boolean;
+  /** Unlock the read-aloud media element from a user gesture (send, mic, Read), so a
+   *  later automatic read can claim the platform's media controls. Safe to call often. */
+  primeOutput: () => void;
+}
+
+/** The element plays while words are sounding or coming; paused and idle keep it quiet. */
+function readPhaseOf(state: TransportState): ReadPhase {
+  if (state === 'speaking' || state === 'waiting') return 'playing';
+  if (state === 'paused') return 'paused';
+  return 'idle';
 }
 
 /**
@@ -89,9 +99,23 @@ export function useVoicePlayback(
 ): VoicePlayback {
   const settings = useSettings();
 
-  // One sink for the hook's lifetime; disposed on unmount.
+  // The element's own pause/play (lock screen, headset, audio focus) feed back
+  // into the machine. The sink is built before the actor exists, so it reaches
+  // the actor through this ref.
+  const machineSendRef = useRef<(event: { type: 'PAUSE' } | { type: 'RESUME' }) => void>(
+    () => undefined,
+  );
+
+  // One sink for the hook's lifetime; disposed on unmount. The bridge override
+  // is read here, once per sink.
   const sinkRef = useRef<AudioSink | null>(null);
-  if (sinkRef.current === null) sinkRef.current = new AudioSink();
+  if (sinkRef.current === null) {
+    sinkRef.current = new AudioSink({
+      mediaElementBridge: isReadAloudBridgeEnabled(),
+      onElementPause: () => machineSendRef.current({ type: 'PAUSE' }),
+      onElementPlay: () => machineSendRef.current({ type: 'RESUME' }),
+    });
+  }
 
   // The active TTS resolution, set at play time. fetchAudio/play below delegate to it.
   const resolutionRef = useRef<Extract<TtsResolution, { ok: true }> | null>(null);
@@ -151,6 +175,20 @@ export function useVoicePlayback(
   const currentSegmentId = useSelector(actor, selectCurrentSegmentId);
   const currentMessageId = useSelector(actor, selectCurrentMessageId);
   const providerSkips = useSelector(actor, selectProviderSkips);
+  machineSendRef.current = (event) => actor.send(event);
+
+  // Live voice shares this sink but never goes through the element: no OS
+  // surface may silence the persona while the open mic carries on (Laura's hard
+  // finding). Declared before the phase effect so a render that changes both
+  // re-routes first.
+  useEffect(() => {
+    sinkRef.current?.setRoute(forceStreamingRead ? 'direct' : 'bridge');
+  }, [forceStreamingRead]);
+
+  // The element's play state follows read-aloud's state, not the sink's lifetime.
+  useEffect(() => {
+    sinkRef.current?.setReadPhase(readPhaseOf(transportState));
+  }, [transportState]);
 
   // Dispose the sink on unmount (the actor stops with the component).
   useEffect(() => {
@@ -312,7 +350,15 @@ export function useVoicePlayback(
     actor.send({ type: 'PLAY', messageId, segments, startIndex });
   };
 
+  const primeOutput = (): void => {
+    // Live voice never uses the element; a persona without TTS has nothing to unlock for.
+    if (forceStreamingRead || disabledReason !== null) return;
+    sinkRef.current?.primeBridge();
+  };
+
   const playMessage = async (message: MessageRow, startIndex = 0): Promise<DisabledReason> => {
+    // Before the first await, so the Read tap's gesture is still current.
+    primeOutput();
     if (!persona) return 'no-provider';
     const segments = segmentMessage(message.contentBlocks, segmentationOpts);
     if (segments.length === 0) return null; // nothing speakable — belt-and-braces
@@ -340,12 +386,14 @@ export function useVoicePlayback(
   };
 
   const resume = (): void => {
+    primeOutput();
     const pos = peekPosition(chatId);
     if (!pos) return;
     void playRemembered(pos.segmentIndex);
   };
 
   const startOver = (): void => {
+    primeOutput();
     void playRemembered(0);
   };
 
@@ -437,7 +485,10 @@ export function useVoicePlayback(
     resume,
     startOver,
     pause: () => actor.send({ type: 'PAUSE' }),
-    resumeAudio: () => actor.send({ type: 'RESUME' }),
+    resumeAudio: () => {
+      primeOutput();
+      actor.send({ type: 'RESUME' });
+    },
     stop: () => {
       // Stop also clears the resume offer: with a remembered position on view,
       // a Stop tap that only sent STOP left the offer standing — Stop appeared
@@ -456,5 +507,6 @@ export function useVoicePlayback(
     recheck,
     getAnalyser: () => sinkRef.current?.getAnalyser() ?? null,
     getIsAudible: () => sinkRef.current?.isAudible() ?? false,
+    primeOutput,
   };
 }

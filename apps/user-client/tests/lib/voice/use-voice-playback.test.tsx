@@ -19,13 +19,29 @@ vi.mock('../../../src/lib/voice/voice-cache.js', () => ({
 // A controllable AudioSink stand-in.
 const sinkPlay = vi.fn(async (_blob: Blob, _signal?: AbortSignal): Promise<void> => {});
 const sinkDispose = vi.fn(async () => {});
+const sinkSetRoute = vi.fn((_route: 'bridge' | 'direct') => {});
+const sinkSetReadPhase = vi.fn((_phase: 'playing' | 'paused' | 'idle') => {});
+const sinkPrime = vi.fn(() => {});
+interface SinkOpts {
+  mediaElementBridge?: boolean;
+  onElementPause?: () => void;
+  onElementPlay?: () => void;
+}
+let lastSinkOpts: SinkOpts = {};
 vi.mock('../../../src/lib/voice/audio-sink.js', () => ({
+  isReadAloudBridgeEnabled: () => true,
   AudioSink: class {
+    constructor(opts: SinkOpts = {}) {
+      lastSinkOpts = opts;
+    }
     play = sinkPlay;
     pause = vi.fn(async () => {});
     resume = vi.fn(async () => {});
     stop = vi.fn();
     dispose = sinkDispose;
+    setRoute = sinkSetRoute;
+    setReadPhase = sinkSetReadPhase;
+    primeBridge = sinkPrime;
   },
 }));
 
@@ -77,6 +93,10 @@ beforeEach(() => {
   sinkPlay.mockReset();
   sinkPlay.mockResolvedValue(undefined);
   sinkDispose.mockClear();
+  sinkSetRoute.mockClear();
+  sinkSetReadPhase.mockClear();
+  sinkPrime.mockClear();
+  lastSinkOpts = {};
   okResolution.fetchAudio.mockClear();
   okResolution.fetchAudio.mockResolvedValue(new Blob(['x'], { type: 'audio/mpeg' }));
 });
@@ -408,5 +428,77 @@ describe('useVoicePlayback', () => {
     expect(result.current.currentSegmentId).toBe('0:1');
     // Position cleared by the play.
     expect(peekPosition('c1')).toBeNull();
+  });
+});
+
+describe('useVoicePlayback — media-element bridge', () => {
+  it('builds the sink with the bridge on and routes through it outside live voice', () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    renderHook(() => useVoicePlayback('c1', persona, []));
+    expect(lastSinkOpts.mediaElementBridge).toBe(true);
+    expect(sinkSetRoute).toHaveBeenLastCalledWith('bridge');
+    expect(sinkSetReadPhase).toHaveBeenLastCalledWith('idle');
+  });
+
+  it('routes direct in live voice, and back to the bridge when it ends', () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    const { rerender } = renderHook(({ live }) => useVoicePlayback('c1', persona, [], live), {
+      initialProps: { live: true },
+    });
+    expect(sinkSetRoute).toHaveBeenLastCalledWith('direct');
+    rerender({ live: false });
+    expect(sinkSetRoute).toHaveBeenLastCalledWith('bridge');
+  });
+
+  it('drives the element phase from the transport: playing, paused, idle', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    await waitFor(() => expect(sinkSetReadPhase).toHaveBeenLastCalledWith('playing'));
+    act(() => result.current.pause());
+    await waitFor(() => expect(sinkSetReadPhase).toHaveBeenLastCalledWith('paused'));
+    act(() => result.current.stop());
+    await waitFor(() => expect(sinkSetReadPhase).toHaveBeenLastCalledWith('idle'));
+  });
+
+  it("maps the element's own pause and play to PAUSE and RESUME", async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    await waitFor(() => expect(result.current.transportState).toBe('speaking'));
+    act(() => lastSinkOpts.onElementPause?.());
+    expect(result.current.transportState).toBe('paused');
+    act(() => lastSinkOpts.onElementPlay?.());
+    expect(result.current.transportState).toBe('speaking');
+  });
+
+  it('primes from a Read tap, but never in live voice or without TTS', async () => {
+    resolveTtsMock.mockResolvedValue(okResolution);
+    sinkPlay.mockImplementation(() => new Promise<void>(() => {}));
+    const { result, rerender } = renderHook(
+      ({ live }) => useVoicePlayback('c1', persona, [], live),
+      { initialProps: { live: false } },
+    );
+    await act(async () => {
+      await result.current.playMessage(msg('m1', TWO_PARA));
+    });
+    expect(sinkPrime).toHaveBeenCalledTimes(1);
+    rerender({ live: true });
+    act(() => result.current.primeOutput());
+    expect(sinkPrime).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not prime for a persona whose TTS is unavailable', async () => {
+    resolveTtsMock.mockResolvedValue({ ok: false, reason: 'no-voice' });
+    const { result } = renderHook(() => useVoicePlayback('c1', persona, []));
+    await waitFor(() => expect(result.current.disabledReason).toBe('no-voice'));
+    act(() => result.current.primeOutput());
+    expect(sinkPrime).not.toHaveBeenCalled();
   });
 });

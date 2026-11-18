@@ -620,6 +620,9 @@ export function ChatPage(): JSX.Element {
   // `editingMessageId` stays set. Routing the decision through one function
   // guarantees the keyboard and voice paths cannot drift out of sync again.
   const onSend = async (text: string): Promise<void> => {
+    // A send is the first gesture of most chats: unlock read-aloud's media
+    // element now, so an auto-read reply can claim the lock-screen controls.
+    voice.primeOutput();
     const action = resolveSendAction(editingMessageId, canReplace);
     if (action === 'replace') {
       await onReplace();
@@ -1228,7 +1231,18 @@ export function ChatPage(): JSX.Element {
           onOpenPersonaEditor={onOpenPersonaEditor}
           onAttachFromTreasury={() => setPickerOpen(true)}
           onAttachFromLibrary={() => setDocumentPickerOpen(true)}
-          dictation={dictation}
+          dictation={{
+            ...dictation,
+            // The mic press is a gesture too (pointerup is the one iOS honours).
+            pressStart: () => {
+              voice.primeOutput();
+              dictation.pressStart();
+            },
+            pressEnd: () => {
+              voice.primeOutput();
+              dictation.pressEnd();
+            },
+          }}
           autoReadAloud={autoReadAloud}
           onToggleAutoRead={onToggleAutoRead}
           voiceUnavailable={voiceUnavailable}
