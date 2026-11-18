@@ -12,10 +12,9 @@ export const CLIENT_DATA_IDENTITY_CONTEXT = 'client-data/identity-binding-v1';
 
 /**
  * The slice of a `MasterKeySession` the guard needs: the encapsulated
- * `deriveDek`. Taking this (not the raw MasterKey) means the guard works on
- * EVERY unlock path — including passkey unlock, which never surfaces the raw
- * MasterKey to the app (the biometric flow returns a `MasterKeySession` and the
- * raw-MK store slice is not set on that path).
+ * `deriveDek`. Taking this (not the raw MasterKey) keeps the guard on the
+ * encapsulated session, so it needs nothing beyond what every unlock path
+ * already hands to `activateSession`.
  */
 export interface IdentityDeriver {
   deriveDek(context: string): Promise<DEK>;

@@ -14,6 +14,8 @@ vi.mock('@chatsundere/crypto', async (importOriginal) => {
     ...actual,
     getLocalAccount: vi.fn(async () => ({ username: 'chris' })),
     getLinkedAccount: vi.fn(async () => null),
+    // The late-link passphrase proof (spec §3.6, F1) resolves a closable session.
+    loginLocalWithPassphrase: vi.fn(async () => ({ session: { close: vi.fn() }, mk: {} })),
     linkToServer: vi.fn(async () => {
       throw new actual.CryptoError('conflict', 'username already registered on this server');
     }),
