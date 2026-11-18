@@ -49,9 +49,13 @@ export function AdultChatGuard(): JSX.Element | null {
   useEffect(() => {
     if (!hidden) return;
     if (nav.resetTo('/app')) {
-      toastStore.show({ message: ADULT_CHAT_CLOSED, tone: 'warn', durationMs: 3500 });
+      toastStore.show({
+        message: unreadable ? "Couldn't open this chat." : ADULT_CHAT_CLOSED,
+        tone: 'warn',
+        durationMs: 3500,
+      });
     }
-  }, [hidden, nav]);
+  }, [hidden, unreadable, nav]);
 
   if (hidden || unknown) return null;
   return <Outlet />;
