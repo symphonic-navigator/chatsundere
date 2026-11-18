@@ -95,6 +95,17 @@ describe('meta lines', () => {
     expect(modelBehaviourMeta({ ...base, askExpertDefault: true })).toBe('Temp 0.85 · Expert');
   });
 
+  it('modelBehaviourMeta — Timeless when time awareness is off', () => {
+    expect(modelBehaviourMeta({ ...base, timeAwareness: false })).toBe('Temp 0.85 · Timeless');
+    expect(modelBehaviourMeta({ ...base, askExpertDefault: true, roleplay: true })).toBe(
+      'Temp 0.85 · Expert · Timeless',
+    );
+  });
+
+  it('modelBehaviourMeta — nothing extra for a roleplay persona whose time is on', () => {
+    expect(modelBehaviourMeta({ ...base, roleplay: true, timeAwareness: true })).toBe('Temp 0.85');
+  });
+
   it('integrationsMeta — default tools', () => {
     expect(integrationsMeta(base)).toBe('Default tools');
   });

@@ -7,12 +7,14 @@ import { PageScaffold } from '../../../components/ui/PageScaffold.js';
 import { useHelp } from '../../../content/help/use-help.js';
 import { useProviders } from '../../../data/providers.js';
 import { useSettings } from '../../../data/settings.js';
+import { resolveTimeAwareness } from '../../../lib/time-awareness.js';
 import { usePersonaEditing } from './use-persona-editing.js';
 
 /**
  * Model behaviour sub-page for a persona. Route: `/app/persona/:id/model`.
  *
- * Covers Temperature, Context Window, and the Ask an Expert by default toggle.
+ * Covers Temperature, Context Window, the Ask an Expert by default toggle and
+ * the "Knows the date and time" switch.
  * All fields save immediately (always-save).
  */
 export function PersonaModelBehaviour(): JSX.Element {
@@ -63,6 +65,8 @@ export function PersonaModelBehaviour(): JSX.Element {
   const off = prov && persona.modelId ? getOffering(prov.templateId, persona.modelId) : undefined;
 
   const expertMissing = settings.data?.expertModel == null;
+  const knowsTime = resolveTimeAwareness(persona);
+  const timelessByDefault = persona.roleplay && persona.timeAwareness === undefined;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -142,6 +146,37 @@ export function PersonaModelBehaviour(): JSX.Element {
             <span
               className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
                 persona.askExpertDefault ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* 4. Knows the date and time ─────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm text-paper">Knows the date and time</div>
+            <p className="text-[11px] text-paper-soft">
+              Each of your messages carries its local date and time, so your companion knows the
+              time of day and how long you were away. Your AI provider sees these times too.
+            </p>
+            {timelessByDefault && (
+              <p data-testid="timeless-default-note" className="mt-1 text-[11px] text-paper-soft">
+                Off for roleplay characters, so a fantasy world stays timeless.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label="Knows the date and time"
+            aria-pressed={knowsTime}
+            onClick={() => void patch({ timeAwareness: !knowsTime })}
+            className={`h-6 w-12 shrink-0 rounded-full border ${
+              knowsTime ? 'border-paper bg-paper/30' : 'border-paper-soft/30 bg-white/5'
+            }`}
+          >
+            <span
+              className={`block h-5 w-5 rounded-full bg-paper transition-transform ${
+                knowsTime ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
           </button>
