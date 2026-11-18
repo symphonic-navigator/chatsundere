@@ -24,6 +24,7 @@ import {
   setSearchCacheView,
   subscribeHistoryGen,
 } from '../../src/lib/history-return.js';
+import { recordLocation, resetNavTrailForTests } from '../../src/state/nav-trail.store.js';
 
 function storedValues(): string[] {
   const out: string[] = [];
@@ -208,6 +209,37 @@ describe('history-return', () => {
     expect(nav).not.toHaveBeenCalled();
     back.mockRestore();
     window.history.replaceState(original, '');
+  });
+
+  it('goHistory steps back to a History entry directly behind, even after a reload lost its memory', () => {
+    // A reload empties the memory-only return target, but the trail of the chat's
+    // history entry (in history.state) still says History sits directly behind it.
+    resetNavTrailForTests();
+    recordLocation({ key: 'h', pathname: '/app/history' }, 'POP');
+    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, 'PUSH');
+    clearHistoryReturn();
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const nav = vi.fn();
+    goHistory('chat-1', '/app/history', nav, vi.fn());
+    expect(back).toHaveBeenCalledOnce();
+    expect(nav).not.toHaveBeenCalled();
+    back.mockRestore();
+    resetNavTrailForTests();
+  });
+
+  it('goHistory opens a fresh visit when History is not directly behind', () => {
+    resetNavTrailForTests();
+    recordLocation({ key: 'h', pathname: '/app/history' }, 'POP');
+    recordLocation({ key: 'x', pathname: '/app/persona/p1' }, 'PUSH');
+    recordLocation({ key: 'c', pathname: '/app/chat/chat-1' }, 'PUSH');
+    clearHistoryReturn();
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const nav = vi.fn();
+    goHistory('chat-1', '/app/history', nav, vi.fn());
+    expect(back).not.toHaveBeenCalled();
+    expect(nav).toHaveBeenCalledWith('/app/history');
+    back.mockRestore();
+    resetNavTrailForTests();
   });
 
   it('notifies subscribers on rotation until they unsubscribe', () => {
