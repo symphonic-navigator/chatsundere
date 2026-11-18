@@ -113,15 +113,15 @@ beforeEach(() => {
 
 function VoiceSettingsSentinel(): JSX.Element {
   const location = useLocation();
-  return <div data-testid="voice-settings-sentinel">{JSON.stringify(location.state)}</div>;
+  return <div data-testid="voice-settings-sentinel">{location.search}</div>;
 }
 
-function renderPage(personaId: string) {
+function renderPage(personaId: string, search = '') {
   state.patch = vi.fn().mockResolvedValue(undefined);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/app/persona/${personaId}/font-voice`]}>
+      <MemoryRouter initialEntries={[`/app/persona/${personaId}/font-voice${search}`]}>
         <Routes>
           <Route path="/app/persona/:id/font-voice" element={<PersonaFontVoice />} />
           <Route
@@ -129,6 +129,7 @@ function renderPage(personaId: string) {
             element={<div data-testid="persona-hub-sentinel">hub</div>}
           />
           <Route path="/app/settings/voice" element={<VoiceSettingsSentinel />} />
+          <Route path="/app/chat/:chatId" element={<div data-testid="chat-sentinel" />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -312,7 +313,7 @@ describe('PersonaFontVoice — service line and disabled hint', () => {
     );
     expect(screen.getByRole('link', { name: 'change in My Settings → Voice' })).toHaveAttribute(
       'href',
-      '/app/settings/voice',
+      `/app/settings/voice?return=${encodeURIComponent('/app/persona/p-1/font-voice')}`,
     );
   });
 
@@ -327,8 +328,25 @@ describe('PersonaFontVoice — service line and disabled hint', () => {
     renderPage('p-1');
     fireEvent.click(await screen.findByRole('link', { name: 'change in My Settings → Voice' }));
     expect(screen.getByTestId('voice-settings-sentinel').textContent).toBe(
-      JSON.stringify({ returnTo: '/app/persona/p-1/font-voice' }),
+      `?return=${encodeURIComponent('/app/persona/p-1/font-voice')}`,
     );
+  });
+
+  it('the service link carries the full URL, ?return= included, so the chain unwinds', async () => {
+    state.persona = { ...BASE_PERSONA };
+    resolveTtsTransportMock.mockResolvedValue({
+      providerConfig: {},
+      apiKey: 'k',
+      offering: { providerId: 'elevenlabs', upstreamSlug: 'eleven_v4' },
+      ttsMeta: { displayName: 'Eleven v4', voices: { kind: 'static', voices: [] } },
+    });
+    const own = `?return=${encodeURIComponent('/app/chat/c1')}`;
+    renderPage('p-1', own);
+    fireEvent.click(await screen.findByRole('link', { name: 'change in My Settings → Voice' }));
+    const sent = new URLSearchParams(
+      screen.getByTestId('voice-settings-sentinel').textContent ?? '',
+    );
+    expect(sent.get('return')).toBe(`/app/persona/p-1/font-voice${own}`);
   });
 
   it('omits the service line when no voice service is configured', async () => {
@@ -342,5 +360,28 @@ describe('PersonaFontVoice — service line and disabled hint', () => {
       ).toBeGreaterThan(0),
     );
     expect(screen.queryByTestId('voice-service-line')).toBeNull();
+  });
+});
+
+describe('PersonaFontVoice — return path', () => {
+  it('?return= drives the back control', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1', `?return=${encodeURIComponent('/app/chat/c1')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('chat-sentinel')).toBeInTheDocument());
+  });
+
+  it('without ?return= back goes to the persona hub', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1');
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('persona-hub-sentinel')).toBeInTheDocument());
+  });
+
+  it('an outside ?return= falls back to the persona hub', async () => {
+    state.persona = { ...BASE_PERSONA };
+    renderPage('p-1', `?return=${encodeURIComponent('//evil.example')}`);
+    fireEvent.click(await screen.findByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByTestId('persona-hub-sentinel')).toBeInTheDocument());
   });
 });

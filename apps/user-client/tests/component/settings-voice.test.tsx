@@ -32,14 +32,22 @@ describe('SettingsVoicePage', () => {
   });
 
   function Where(): JSX.Element {
-    return <div data-testid="where">{useLocation().pathname}</div>;
+    const l = useLocation();
+    return <div data-testid="where">{`${l.pathname}${l.search}`}</div>;
   }
 
-  function renderWithState(state: unknown) {
+  function splitUrl(url: string): { pathname: string; search: string } {
+    const i = url.indexOf('?');
+    return i < 0
+      ? { pathname: url, search: '' }
+      : { pathname: url.slice(0, i), search: url.slice(i) };
+  }
+
+  function renderAt(url: string, state?: unknown) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={[{ pathname: '/app/settings/voice', state }]}>
+        <MemoryRouter initialEntries={[{ ...splitUrl(url), state }]}>
           <Routes>
             <Route path="/app/settings/voice" element={<SettingsVoicePage />} />
             <Route path="*" element={<Where />} />
@@ -49,20 +57,27 @@ describe('SettingsVoicePage', () => {
     );
   }
 
-  it('goes back to the page that sent the user here', () => {
-    renderWithState({ returnTo: '/app/persona/p-1/font-voice' });
+  it('goes back to the ?return= sender, search included', () => {
+    const ret = '/app/persona/p-1/font-voice?return=%2Fapp%2Fchat%2Fc1';
+    renderAt(`/app/settings/voice?return=${encodeURIComponent(ret)}`);
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByTestId('where').textContent).toBe('/app/persona/p-1/font-voice');
+    expect(screen.getByTestId('where').textContent).toBe(ret);
   });
 
   it('falls back to My Settings without a return target', () => {
-    renderWithState(null);
+    renderAt('/app/settings/voice');
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByTestId('where').textContent).toBe('/app/settings');
+  });
+
+  it('no longer honours router state (the retired convention)', () => {
+    renderAt('/app/settings/voice', { returnTo: '/app/persona/p-1/font-voice' });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByTestId('where').textContent).toBe('/app/settings');
   });
 
   it('ignores a return target outside the app', () => {
-    renderWithState({ returnTo: '//evil.example/app' });
+    renderAt(`/app/settings/voice?return=${encodeURIComponent('//evil.example/app')}`);
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByTestId('where').textContent).toBe('/app/settings');
   });

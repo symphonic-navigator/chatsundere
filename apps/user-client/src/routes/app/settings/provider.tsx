@@ -7,8 +7,8 @@ import {
   providerServiceKinds,
 } from '@chatsundere/llm-unified';
 import { useSessionStore } from '@chatsundere/ui-shared';
-import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getClientDataDb } from '../../../boot/client-data-db.js';
 import { CapBadgeRow } from '../../../components/CapBadgeRow.js';
 import {
@@ -25,6 +25,8 @@ import {
   useProviders,
   useUpsertProvider,
 } from '../../../data/providers.js';
+import { PASSPHRASE_SENTENCE, passphraseLoginPath } from '../../../data/send-errors.js';
+import { keyTestFailure } from '../../../lib/key-test-failure.js';
 import { type DiagnosticReport, runStreamingTest } from '../../../lib/model-debug.js';
 import { safeReturnPath } from '../../../lib/safe-return.js';
 import { openSecret, sealSecret } from '../../../lib/secrets.js';
@@ -35,7 +37,14 @@ type Status =
   | { kind: 'idle' }
   | { kind: 'probing' }
   | { kind: 'ok' }
-  | { kind: 'error'; reason: string };
+  /** `detail` is raw technical text, shown smaller under the plain `reason`;
+   *  `action` is the one way out, when there is one. */
+  | { kind: 'error'; reason: string; detail?: string; action?: { label: string; to: string } };
+
+/** A saved key that AES-GCM refuses to open (sealed under an earlier master key). */
+function isOperationError(e: unknown): boolean {
+  return (e as { name?: unknown } | null)?.name === 'OperationError';
+}
 
 /** Success badge copy: voice-only providers unlock voices, LLM providers unlock the LLM. */
 export function keyValidCopy(capabilities: readonly string[] | undefined): string {
@@ -49,6 +58,7 @@ export function SettingsProviderPage(): JSX.Element {
   const navigate = useNavigate();
   const { templateId = '' } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   // A repair trip from the cockpit fallback returns to its chat (spec §3.3).
   const backTo = safeReturnPath(searchParams.get('return'), '/app/settings/providers');
   const definition = getProvider(templateId);
@@ -87,6 +97,13 @@ export function SettingsProviderPage(): JSX.Element {
 
   const back = () => navigate(backTo);
 
+  // Opened from a send's "Re-enter key": the key field is where the user goes next.
+  const keyInputRef = useRef<HTMLInputElement>(null);
+  const focusKey = searchParams.get('focus') === 'key';
+  useEffect(() => {
+    if (focusKey) keyInputRef.current?.focus();
+  }, [focusKey]);
+
   // ── Ported verbatim from ProviderSheet.tsx:46-133 ────────────────────────────
   //    Changes: (1) onClose() → back(); (2) needs-proxy reason text updated to
   //    reference "AI Providers" rather than "Upstream Providers".
@@ -95,8 +112,16 @@ export function SettingsProviderPage(): JSX.Element {
       setStatus({ kind: 'error', reason: 'API key required' });
       return;
     }
-    if (!mk || !definition) {
-      setStatus({ kind: 'error', reason: 'No master key in session — re-login required' });
+    if (!definition) return;
+    if (!mk) {
+      setStatus({
+        kind: 'error',
+        reason: PASSPHRASE_SENTENCE,
+        action: {
+          label: 'Enter passphrase',
+          to: passphraseLoginPath(`${location.pathname}${location.search}`),
+        },
+      });
       return;
     }
     if (requiresProxy && !proxyGate.enabled) {
@@ -139,10 +164,20 @@ export function SettingsProviderPage(): JSX.Element {
         setStatus({ kind: 'ok' });
         back();
       } else {
-        setStatus({ kind: 'error', reason: `${result.status} · ${result.reason ?? ''}` });
+        const failure = keyTestFailure({
+          providerName: definition.displayName ?? templateId,
+          viaRelay: requiresProxy,
+          status: result.status,
+          reason: result.reason,
+        });
+        setStatus({ kind: 'error', reason: failure.message, detail: failure.detail });
       }
     } catch (e) {
-      setStatus({ kind: 'error', reason: e instanceof Error ? e.message : String(e) });
+      setStatus(
+        isOperationError(e)
+          ? { kind: 'error', reason: "The saved key can't be opened any more. Paste it again." }
+          : { kind: 'error', reason: e instanceof Error ? e.message : String(e) },
+      );
     } finally {
       setSaving(false);
     }
@@ -231,6 +266,7 @@ export function SettingsProviderPage(): JSX.Element {
           <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/30 px-3 py-2">
             <input
               id="ps-api-key"
+              ref={keyInputRef}
               type={revealKey ? 'text' : 'password'}
               placeholder="sk-..."
               value={apiKey}
@@ -267,7 +303,22 @@ export function SettingsProviderPage(): JSX.Element {
               ? 'Probing…'
               : status.kind === 'ok'
                 ? keyValidCopy(definition.capabilities)
-                : `✗ ${(status as { kind: 'error'; reason: string }).reason}`}
+                : status.kind === 'error'
+                  ? `✗ ${status.reason}`
+                  : null}
+            {status.kind === 'error' && status.detail ? (
+              <div
+                data-testid="sheet-status-detail"
+                className="mt-1 font-mono text-[10px] opacity-70"
+              >
+                {status.detail}
+              </div>
+            ) : null}
+            {status.kind === 'error' && status.action ? (
+              <Link to={status.action.to} className="mt-1 block underline underline-offset-2">
+                {status.action.label}
+              </Link>
+            ) : null}
           </div>
         ) : null}
 

@@ -58,6 +58,17 @@ function renderAt(path: string) {
   );
 }
 
+/**
+ * The switch renders before the settings query resolves and stays `disabled`
+ * until it does; a click on it before then is a no-op. Under CI load the query
+ * can take longer than `findByRole` needs, so wait for the enabled switch.
+ */
+async function findEnabledSwitch(): Promise<HTMLElement> {
+  const toggle = await screen.findByRole('switch', { name: 'Projects (preview)' });
+  await waitFor(() => expect(toggle).toBeEnabled());
+  return toggle;
+}
+
 async function setFlag(on: boolean): Promise<void> {
   await getClientDataDb().settings.update(1, { previews: { projects: on } });
 }
@@ -109,7 +120,7 @@ describe('Previews preview flag', () => {
         'An early look at project files. Projects live on this device only for now.',
       ),
     ).toBeInTheDocument();
-    const toggle = await screen.findByRole('switch', { name: 'Projects (preview)' });
+    const toggle = await findEnabledSwitch();
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(toggle);
     await waitFor(async () =>
@@ -147,7 +158,7 @@ describe('Previews preview flag', () => {
 
   it('shows a warning toast when the toggle cannot be saved', async () => {
     renderAt('/app/settings/previews');
-    const toggle = await screen.findByRole('switch', { name: 'Projects (preview)' });
+    const toggle = await findEnabledSwitch();
     vi.spyOn(getClientDataDb().settings, 'update').mockRejectedValueOnce(new Error('disk full'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     fireEvent.click(toggle);
