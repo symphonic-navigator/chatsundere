@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { type OnboardingState, useOnboardingStore } from '../state/onboarding.store.js';
+import { toastStore } from '../state/toast.store.js';
 
 const INVITATION_REVEAL = '/onboarding/invitation/recovery';
 
@@ -27,7 +28,24 @@ export function RecoveryRevealHold({ children }: { children: ReactNode }): JSX.E
     // The invitation reveal keeps the wizard's own `?return=`, held with the key.
     const held = useOnboardingStore.getState().state;
     const keep = held.kind === 'invitation_recovery' ? (held.search ?? '') : '';
-    return <Navigate to={{ pathname: target, search: keep }} replace />;
+    return (
+      <>
+        <HoldNotice />
+        <Navigate to={{ pathname: target, search: keep }} replace />
+      </>
+    );
   }
   return <>{children}</>;
+}
+
+/** Says why the user is back on the key, so the bounce does not read as a fault. */
+function HoldNotice(): null {
+  useEffect(() => {
+    toastStore.show({
+      message: 'Save your recovery key, then Continue.',
+      tone: 'info',
+      durationMs: 3500,
+    });
+  }, []);
+  return null;
 }

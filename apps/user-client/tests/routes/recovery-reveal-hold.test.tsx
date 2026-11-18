@@ -5,10 +5,11 @@
 // rendering, so the page it replaces never mounts or runs its effects.
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecoveryRevealHold } from '../../src/components/RecoveryRevealHold.js';
 import { OnboardingMatrix } from '../../src/routes/onboarding/matrix.js';
 import { useOnboardingStore } from '../../src/state/onboarding.store.js';
+import { toastStore } from '../../src/state/toast.store.js';
 
 let go: (to: string) => void = () => {};
 function Grab() {
@@ -97,8 +98,12 @@ describe('RecoveryRevealHold', () => {
       recoveryKeyString: 'KEY',
       at: '/onboarding/local',
     });
+    const show = vi.spyOn(toastStore, 'show');
     render(<App at="/app" />);
     expect(heading()).toBe('Local wizard');
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Save your recovery key, then Continue.' }),
+    );
     act(() => useOnboardingStore.getState().reset());
     act(() => go('/app'));
     expect(heading()).toBe('Hall');

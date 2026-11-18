@@ -111,6 +111,16 @@ describe('AdultChatGuard', () => {
     expect(show).toHaveBeenCalledTimes(1);
   });
 
+  it('a chat it cannot read in SFW mode leads to the Hall instead of a blank page', async () => {
+    const qc = client('sfw', null, { chatCached: false });
+    qc.setQueryData(QK.personas, [{ id: 'p2', adultPersona: true }]);
+    qc.setQueryDefaults(QK.chat('c1'), {
+      queryFn: () => Promise.reject(new Error('read failed')),
+    });
+    render(<App qc={qc} />);
+    expect(await screen.findByText('Hall')).toBeInTheDocument();
+  });
+
   it('renders nothing while the persona is not yet known', () => {
     render(<App qc={client('sfw', null)} />);
     expect(screen.queryByText('Chat content')).toBeNull();

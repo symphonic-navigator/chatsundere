@@ -22,6 +22,9 @@ function Page() {
       <button type="button" onClick={() => nav.returnTo('/app')}>
         home
       </button>
+      <button type="button" onClick={() => nav.back('/up')}>
+        back
+      </button>
     </div>
   );
 }
@@ -122,6 +125,40 @@ describe('returnTo the Hall', () => {
     await tap('deeper');
     await tap('home');
     expect(where()).toBe('/app');
+    expect(idx()).toBe(0);
+  });
+});
+
+describe('a step back that never arrives', () => {
+  it('falls back to the page above after the bound, so ‹ is never dead', async () => {
+    render(<App />);
+    await tap('deeper');
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+    await tap('back', RESET_TIMEOUT_MS + 50);
+    expect(go).toHaveBeenCalledWith(-1);
+    expect(where()).toBe('/up');
+    go.mockRestore();
+    // And ‹ works again on the new page.
+    await tap('deeper');
+    await tap('back');
+    expect(where()).toBe('/up');
+  });
+});
+
+describe('a reset whose unwind arrives late', () => {
+  it('still puts the target in place of the first entry', async () => {
+    render(<App />);
+    await tap('deeper');
+    await tap('deeper');
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+    await tap('reset', RESET_TIMEOUT_MS + 50);
+    expect(where()).toBe('/done');
+    go.mockRestore();
+    await act(async () => {
+      window.history.go(-2);
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(where()).toBe('/done');
     expect(idx()).toBe(0);
   });
 });

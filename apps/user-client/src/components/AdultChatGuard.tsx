@@ -40,7 +40,10 @@ export function AdultChatGuard(): JSX.Element | null {
       : personaId === undefined || personas.data === undefined
         ? null
         : personas.data.some((p) => p.id === personaId && p.adultPersona);
-  const hidden = mode === 'sfw' && adult === true;
+  // A chat or persona list it cannot read stays closed, but leads to the Hall
+  // rather than a blank page: on a chat route there is no ‹ to leave by.
+  const unreadable = mode === 'sfw' && adult === null && (chat.isError || personas.isError);
+  const hidden = mode === 'sfw' && (adult === true || unreadable);
   const unknown = mode === null || (mode === 'sfw' && adult === null);
 
   useEffect(() => {

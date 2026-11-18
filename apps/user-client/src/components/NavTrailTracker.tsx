@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useLayoutEffect } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
-import { finishReset } from '../lib/use-app-nav.js';
-import { historyStateFor, recordLocation, trailOf } from '../state/nav-trail.store.js';
+import { finishLateReset, finishReset } from '../lib/use-app-nav.js';
+import { historyStateFor, idxOf, recordLocation, trailOf } from '../state/nav-trail.store.js';
 
 /**
  * Keeps every history entry's trail (spec "Back means one thing"). Mounted once,
@@ -19,7 +19,9 @@ export function NavTrailTracker(): null {
   // A reset's unwind has landed: put the target in place of the first entry.
   // biome-ignore lint/correctness/useExhaustiveDependencies: must run on every new entry, and two POPs in a row share `type`
   useLayoutEffect(() => {
-    if (type === 'POP') finishReset(navigate);
+    if (type !== 'POP') return;
+    finishReset(navigate);
+    finishLateReset(idxOf(location.key), navigate);
   }, [location.key, type, navigate]);
 
   useLayoutEffect(() => {

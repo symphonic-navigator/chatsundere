@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useAccountLinkStore, useSessionStore } from '@chatsundere/ui-shared';
 import { JoinLanding } from '../../src/routes/join.js';
 import { PairingForm } from '../../src/routes/onboarding/pairing/form.js';
+import { resetNavTrailForTests } from '../../src/state/nav-trail.store.js';
 import { useOnboardingStore } from '../../src/state/onboarding.store.js';
 import { useToastStore } from '../../src/state/toast.store.js';
 
@@ -49,6 +50,7 @@ function pathname(): string | null {
 
 describe('JoinLanding — the /join chooser for scanned Chatsundere codes', () => {
   beforeEach(() => {
+    resetNavTrailForTests();
     useSessionStore.setState({ session: null, mk: null });
     useAccountLinkStore.setState({
       linkStatus: 'unknown',

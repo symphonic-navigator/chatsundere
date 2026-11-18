@@ -66,16 +66,29 @@ export function recordLocation(
   movingFrom = null;
 }
 
-// The entry a history traversal left from, until the next entry is shown: a second
-// move from the same entry (a double tap, an effect run twice) is ignored, so one
-// tap never skips a page.
-let movingFrom: string | null = null;
+// The entry a move last left from, and when: a second move from the same entry
+// soon after (a double tap, an effect run twice under StrictMode) is ignored, so
+// one tap never skips a page. Cleared when the next entry is shown, and expiring
+// on its own so it can never block a later, deliberate move.
+let movingFrom: { key: string; at: number } | null = null;
+const DUPLICATE_WINDOW_MS = 1000;
 
-/** Claim a traversal from the entry `key`; false when one is already under way. */
+/** Claim a move from the entry `key`; false when one just left from it. */
 export function claimTraversal(key: string): boolean {
-  if (movingFrom === key) return false;
-  movingFrom = key;
+  const now = Date.now();
+  if (movingFrom?.key === key && now - movingFrom.at < DUPLICATE_WINDOW_MS) return false;
+  movingFrom = { key, at: now };
   return true;
+}
+
+/** Give up a claim whose move never arrived, so the next tap can act. */
+export function releaseTraversal(key: string): void {
+  if (movingFrom?.key === key) movingFrom = null;
+}
+
+/** The key of the entry shown now, when one has been recorded. */
+export function currentKey(): string | null {
+  return current?.key ?? null;
 }
 
 /** The trail of the entry `key`, empty when unknown. */
