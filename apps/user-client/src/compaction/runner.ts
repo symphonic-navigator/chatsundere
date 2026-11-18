@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
 import {
   type Offering,
   type ProviderConfig,
@@ -20,6 +19,8 @@ import { getClientDataDb } from '../boot/client-data-db.js';
 import { flattenAnswerText, isContextMessage } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
 import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
+// SPDX-License-Identifier: AGPL-3.0-only
+import { resolveTimeAwareness } from '../lib/time-awareness.js';
 import { estimateTokens } from '../lib/token-estimator.js';
 import { estimateReplayTokens, toolTranscriptRefs } from '../lib/tool-replay.js';
 import {
@@ -127,7 +128,10 @@ export async function runCompaction(args: CompactionArgs): Promise<CompactionChe
 
   const pillsById = await loadReplayPills(all.map((m) => m.id));
   const attachmentsById = await loadReplayAttachments(all.map((m) => m.id));
-  const tokenOf = (m: MessageRow): number => estimateReplayTokens(m, pillsById, attachmentsById);
+  // Count stamps as the wire does, so the tail fits the window it is sent in.
+  const stamped = resolveTimeAwareness(args.persona);
+  const tokenOf = (m: MessageRow): number =>
+    estimateReplayTokens(m, pillsById, attachmentsById, stamped);
 
   const window = resolveContextWindow(args.persona, args.windowOffering ?? args.offering);
   const tokens = all.map(tokenOf);

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import type { AttachmentRow, MessageRow, PersonaRow, PillRow } from '../../boot/client-data-db.js';
@@ -9,6 +8,8 @@ import { flattenAnswerText } from '../../lib/content-blocks.js';
 import { outOfWindowCount } from '../../lib/context-window.js';
 import { formatDateSepLabel } from '../../lib/date-separator-label.js';
 import { displayPlainText } from '../../lib/teal/display-plain-text.js';
+// SPDX-License-Identifier: AGPL-3.0-only
+import { resolveTimeAwareness } from '../../lib/time-awareness.js';
 import { estimateReplayTokens } from '../../lib/tool-replay.js';
 import { segmentMessage } from '../../lib/voice/segmentation.js';
 import { useCurrentChatStore } from '../../state/current-chat.store.js';
@@ -139,10 +140,12 @@ export function ChatStream(p: ChatStreamProps): JSX.Element {
     for (const pill of p.streamHandle.pillBuffer) pillMap.set(pill.id, pill);
   }
 
+  // Count stamps as the wire does, so the marker and the gauge agree.
+  const stampedTurns = p.persona ? resolveTimeAwareness(p.persona) : false;
   const outCount =
     p.contextBudget != null
       ? outOfWindowCount(
-          sorted.map((m) => estimateReplayTokens(m, pillMap, p.attachmentsByMessage)),
+          sorted.map((m) => estimateReplayTokens(m, pillMap, p.attachmentsByMessage, stampedTurns)),
           p.systemTokens ?? 0,
           p.contextBudget,
         )
