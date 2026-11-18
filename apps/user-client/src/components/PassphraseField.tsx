@@ -54,7 +54,7 @@ export function PassphraseField({
         <button
           type="button"
           onClick={() => setShown((v) => !v)}
-          className="shrink-0 font-mono text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
+          className="cs-hit shrink-0 self-stretch px-1 font-mono text-xs uppercase tracking-wider text-paper-soft hover:text-paper"
           aria-label={shown ? 'Hide passphrase' : 'Show passphrase'}
         >
           {shown ? 'Hide' : 'Show'}

@@ -124,7 +124,7 @@ export function CockpitMenu(p: Props): JSX.Element {
               type="button"
               role="menuitemradio"
               aria-checked={p.chatFontScale === step}
-              className={`cockpit-chip${p.chatFontScale === step ? ' active' : ''}`}
+              className={`cockpit-chip cs-hit${p.chatFontScale === step ? ' active' : ''}`}
               data-size={step}
               onClick={() => p.onChatFontScaleChange(step)}
             >

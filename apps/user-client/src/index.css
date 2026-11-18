@@ -5957,6 +5957,15 @@ html {
   min-height: 2.75rem;
 }
 
+/* The cockpit menu's Text size chips wrap onto two rows 0.25rem apart, so a
+   full 44 px hit area would overlap the chip above or beside: like the
+   message controls, each takes half of the gap. */
+.cockpit-menu-chips .cockpit-chip.cs-hit::before {
+  inset: -2px;
+  width: auto;
+  height: auto;
+}
+
 /* A pill's remove × is a child of the pill: positioned, it paints and is
    hit-tested above the pill's own hit area instead of being swallowed by it. */
 .cs-pill-x {

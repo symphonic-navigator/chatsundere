@@ -368,14 +368,14 @@ export function Login() {
             <button
               type="button"
               onClick={() => navigate('/login/recovery')}
-              className="text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+              className="cs-tap-44 inline-flex items-center text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
             >
               {copy.login.forgotLink}
             </button>
             <button
               type="button"
               onClick={() => navigate('/login/start-over')}
-              className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+              className="cs-tap-44 block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
             >
               Start over on this device
             </button>
