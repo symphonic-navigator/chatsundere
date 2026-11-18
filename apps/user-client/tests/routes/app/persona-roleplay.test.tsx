@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { NavTrailTracker } from '../../../src/components/NavTrailTracker.js';
+import { PageScaffold } from '../../../src/components/ui/PageScaffold.js';
 import { PersonaRoleplay } from '../../../src/routes/app/persona/roleplay.js';
 
 // ── Shared stable persona fixtures ───────────────────────────────────────────
@@ -364,5 +366,38 @@ describe('PersonaRoleplay — time cross-reference', () => {
     renderPage('p-1');
     await waitFor(() => expect(screen.getByTestId('persona-roleplay')).toBeInTheDocument());
     expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  it('Back from Model behaviour, reached by the note, returns to Roleplay, not the hub', async () => {
+    // Spec "Back means one thing", What changes where item 8 (with #57's link).
+    state.persona = { ...BASE_PERSONA, roleplay: true };
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/app/persona/p-1/roleplay']}>
+          <NavTrailTracker />
+          <Routes>
+            <Route path="/app/persona/:id/roleplay" element={<PersonaRoleplay />} />
+            <Route
+              path="/app/persona/:id/model"
+              element={
+                <PageScaffold crumbs={[{ label: 'Model behaviour' }]} back="/app/persona/p-1">
+                  <div data-testid="persona-model-sentinel">model</div>
+                </PageScaffold>
+              }
+            />
+            <Route
+              path="/app/persona/:id"
+              element={<div data-testid="persona-hub-sentinel">hub</div>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('link', { name: 'Model behaviour' }));
+    expect(await screen.findByTestId('persona-model-sentinel')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByTestId('roleplay-timeless-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('persona-hub-sentinel')).toBeNull();
   });
 });
