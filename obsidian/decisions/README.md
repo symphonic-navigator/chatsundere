@@ -58,3 +58,4 @@ For small, contained decisions (a variable name, a layout choice), a code commen
 - [0038](0038-oauth-for-mcp-connectors.md) — OAuth for MCP connectors is client-side, and tokens sync as ciphertext
 - [0039](0039-maintenance-branches-and-version-diary.md) — Maintenance branches, forward-ported models and a version diary
 - [0040](0040-filter-juvenile-voices.md) — Juvenile voices are filtered out, openly
+- [0041](0041-no-maintenance-branch-for-0.5.md) — No maintenance branch for 0.5; Eidolon builds on its own branch
