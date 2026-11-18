@@ -6,10 +6,11 @@ import { getPasskeyCredential, putPasskeyCredential } from '../db/passkey-creden
 import { CryptoError } from '../errors.js';
 import { aeadDecrypt } from '../primitives/aead.js';
 import { deriveIntegrityKey, verifyIntegrityHmac } from '../primitives/integrity.js';
-import { type MasterKeySession, createMasterKeySession } from '../session.js';
+import { createMasterKeySession } from '../session.js';
 import { WRAP_ALGO, asMasterKey } from '../types.js';
 import { verifyLocalAssertion } from '../webauthn/local-verify.js';
 import { credentialIdPrefix } from '../webauthn/prf.js';
+import type { LoginLocalResult } from './login-local.js';
 
 export interface LoginWithLocalBiometricArgs {
   db: IDBDatabase;
@@ -22,9 +23,24 @@ export interface LoginWithLocalBiometricArgs {
   origin: string;
 }
 
+/**
+ * Unwrap the local MK with a passkey. Verifies the WebAuthn assertion against
+ * the stored credential (signature, origin, sign counter), derives the PRF AMK,
+ * verifies the integrity HMAC, AES-256-GCM-decrypts the PRF-wrapped MK and
+ * persists the new sign counter. Returns an open `MasterKeySession` and the MK.
+ *
+ * The returned `mk` is the very buffer the session captures, not a copy, so
+ * `session.close()` zeroes both at once.
+ *
+ * Throws `CryptoError('not_found', ...)` for an unknown credential,
+ * `CryptoError('webauthn_verification_failed', ...)` or
+ * `CryptoError('webauthn_sign_counter_rollback', ...)` for a rejected
+ * assertion, and `CryptoError('integrity_check_failed', ...)` for a wrong PRF
+ * output or a tampered bundle. The sign counter is persisted only on success.
+ */
 export async function loginWithLocalBiometric(
   args: LoginWithLocalBiometricArgs,
-): Promise<MasterKeySession> {
+): Promise<LoginLocalResult> {
   const local = requireLocalAccount(await getLocalAccount(args.db));
   const cred = await getPasskeyCredential(args.db, args.credentialId);
   if (!cred) throw new CryptoError('not_found', 'unknown credential');
@@ -62,13 +78,15 @@ export async function loginWithLocalBiometric(
   cred.sign_counter = newSignCounter;
   await putPasskeyCredential(args.db, cred);
 
-  return createMasterKeySession({
-    mk: asMasterKey(mkBytes),
+  const mk = asMasterKey(mkBytes);
+  const session = createMasterKeySession({
+    mk,
     userId: `local-${local.created_at.getTime()}`,
     username: local.username,
     mode: 'local',
     online: false,
   });
+  return { session, mk };
 }
 
 function parseSignCounterFromAuthData(authData: Uint8Array): number {
