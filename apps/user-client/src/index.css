@@ -5785,7 +5785,11 @@ h1 {
   .treasury-row-star,
   .cs-pill,
   .cs-overflow-trigger-labelled,
-  .dual-action-btn {
+  .dual-action-btn,
+  .cockpit-dictation-note button,
+  .cockpit-dictation-note a,
+  .cockpit-artefact-note button,
+  .voice-transport-startover {
     position: relative;
   }
 }
@@ -6030,6 +6034,29 @@ html {
   inset: -10px -30px -10px -4px;
   width: auto;
   height: auto;
+}
+
+/* The cockpit's notes (a send that was blocked, a voice that is missing, the
+   artefact expert's error) put their repair and Dismiss in an 11 px line, 0.5rem
+   apart, 0.2rem inside the note. Above sits the icon row (whose buttons end
+   about 7 px above the note) or another note, below the textarea or another
+   note, so each takes half of the tightest gap: 4 px sideways, 3 px up and
+   1.5 px down towards the textarea. */
+.cockpit-dictation-note :is(button, a)::before,
+.cockpit-artefact-note button::before {
+  content: "";
+  position: absolute;
+  inset: -3px -4px -1.5px;
+}
+
+/* The audio toolbar's note line ("Try again", the voice repair, "Start over")
+   sits 0.6rem below the toolbar's top edge, past which the chat stream's own
+   controls may lie, and 0.4rem above the 56 px playback row: half of each gap
+   vertically, half of the line's 0.5rem gap sideways. */
+.voice-transport-startover::before {
+  content: "";
+  position: absolute;
+  inset: -4px -4px -3px;
 }
 
 /* The home indicator is cleared once, by whatever sits at the chat's bottom

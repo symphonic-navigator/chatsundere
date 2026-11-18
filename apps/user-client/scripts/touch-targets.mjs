@@ -6,7 +6,10 @@
  * safe-area insets emulated, onboards a throwaway local account, mocks
  * OpenRouter (key check and a streamed chat reply), creates a persona with a
  * model, a chat with two replies, a bookmark and a knowledge library with one
- * document, then visits every screen it can reach and reports:
+ * document, then visits every screen it can reach (the first-run state between
+ * a provider and a persona, the chat's cockpit and quick menus, the voice
+ * notes of an account without a voice provider and, last, the login screen
+ * asking for the passphrase) and reports:
  *
  *   - undersized targets: every interactive element whose hit area is below
  *     44 px on either side. The hit area is the element's box united with its
@@ -396,6 +399,13 @@ async function sweep(baseUrl) {
   await p.waitForTimeout(2500);
   await snap('/app/settings/providers/openrouter (saved)');
 
+  // First run between a provider and a persona: the providers page offers
+  // "Next: create your first companion", the Entrance Hall its setup steps.
+  await go(p, '/app/settings/providers');
+  await snap('/app/settings/providers (provider, no persona)');
+  await go(p, '/app');
+  await snap('/app (provider, no persona)');
+
   await go(p, '/app/circle');
   await p.getByRole('button', { name: 'New persona' }).click();
   await p.waitForTimeout(800);
@@ -515,6 +525,51 @@ async function sweep(baseUrl) {
       await go(p, `${chatUrl}/bookmarks`);
       await snap('/app/chat/:chatId/bookmarks');
     });
+    // The chat's menus and the voice notes a local account without a voice
+    // provider reaches: each is opened, measured and closed again.
+    await step(notes, 'cockpit menu', async () => {
+      await go(p, chatUrl);
+      await p.getByRole('button', { name: 'Open chat menu' }).click();
+      await p.waitForTimeout(600);
+      await snap('/app/chat/:chatId (cockpit menu)');
+      await p.keyboard.press('Escape');
+      await p.waitForTimeout(400);
+    });
+    await step(notes, 'quick menu', async () => {
+      // The root header carries a second, hidden "Quick menu" button.
+      await p.locator('button[aria-label="Quick menu"]:visible').first().click();
+      await p.waitForTimeout(600);
+      await snap('/app/chat/:chatId (quick menu)');
+      await p.keyboard.press('Escape');
+      await p.waitForTimeout(400);
+    });
+    // Without a voice provider the voice controls are aria-disabled, which
+    // Playwright treats as not enabled, but a tap still shows why and the repair.
+    await step(notes, 'live voice note', async () => {
+      const live = p.getByRole('button', { name: 'Live voice mode' });
+      await live.click({ force: true });
+      await p.waitForTimeout(600);
+      await snap('/app/chat/:chatId (live voice unavailable)');
+      await live.click({ force: true });
+      await p.waitForTimeout(400);
+    });
+    await step(notes, 'read note', async () => {
+      await p.locator('.msg .msg-text').last().click();
+      await p.waitForTimeout(800);
+      await p
+        .locator('.msg.expanded .ctrl-btn')
+        .filter({ hasText: 'Read' })
+        .last()
+        .click({ force: true });
+      // The note makes the reply taller; the stream does not follow, and the
+      // floating "Scroll to end" would cover the row being measured.
+      await p.evaluate(() => {
+        const s = document.querySelector('.chat-stream');
+        if (s) s.scrollTop = s.scrollHeight;
+      });
+      await p.waitForTimeout(800);
+      await snap('/app/chat/:chatId (read unavailable note)');
+    });
     await go(p, '/app/history');
     await snap('/app/history (one chat)');
     await step(notes, 'history bookmarks', async () => {
@@ -526,6 +581,13 @@ async function sweep(baseUrl) {
       await snap('/app/history (bookmarks)');
     });
   }
+
+  // Last, since unlocking would replace the session: the login screen the app
+  // sends a session without a master key to, with "Not now" for a signed-in user.
+  await step(notes, 'login (need passphrase)', async () => {
+    await go(p, '/login?need=passphrase');
+    await snap(`/login?need=passphrase${path().startsWith('/login') ? '' : ` -> ${path()}`}`);
+  });
 
   await b.close();
   return { screens, notes };

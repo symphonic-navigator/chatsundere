@@ -61,7 +61,7 @@ export function CockpitMenu(p: Props): JSX.Element {
             role="menuitem"
             to={p.model.changeHref}
             onClick={p.onClose}
-            className="mt-1 inline-block text-xs text-paper-soft underline-offset-2 hover:underline"
+            className="cs-hit mt-1 inline-block text-xs text-paper-soft underline-offset-2 hover:underline"
           >
             change on the persona ›
           </Link>

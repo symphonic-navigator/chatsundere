@@ -360,7 +360,7 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => navigate(returnTarget, { replace: true })}
-                className="block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
+                className="cs-tap-44 block w-full text-sm text-paper-soft underline-offset-2 hover:text-paper hover:underline"
               >
                 {copy.login.notNow}
               </button>

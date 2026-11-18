@@ -543,7 +543,7 @@ export function PersonaHub(): JSX.Element {
                   models can't be helpers.{' '}
                   <button
                     type="button"
-                    className="underline underline-offset-2 hover:text-paper"
+                    className="cs-hit underline underline-offset-2 hover:text-paper"
                     onClick={(e) => {
                       privacyTriggerRef.current = e.currentTarget;
                       setShowPrivacy(true);

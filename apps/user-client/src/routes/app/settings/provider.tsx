@@ -315,7 +315,10 @@ export function SettingsProviderPage(): JSX.Element {
               </div>
             ) : null}
             {status.kind === 'error' && status.action ? (
-              <Link to={status.action.to} className="mt-1 block underline underline-offset-2">
+              <Link
+                to={status.action.to}
+                className="cs-tap-44 mt-1 flex items-center underline underline-offset-2"
+              >
                 {status.action.label}
               </Link>
             ) : null}
