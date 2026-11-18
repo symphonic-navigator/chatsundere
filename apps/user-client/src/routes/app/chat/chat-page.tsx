@@ -1004,13 +1004,15 @@ export function ChatPage(): JSX.Element {
         return (
           <StreamInterruptedFooter
             disabled={isStreamLive}
-            retryDisabled={class2Gate.disabled}
+            // Retry deletes before it resends; without the persona it could not resend.
+            retryDisabled={class2Gate.disabled || !effectivePersona}
             retryDisabledReason={class2Gate.tooltip ?? undefined}
             failureKind={last.failureKind}
             onShowDiagnostics={diagnosticsReport ? () => setDiagOpen(true) : undefined}
             onRetry={async () => {
-              // activeChatId is non-null whenever messages exist (chat-mode only).
-              if (!activeChatId) return;
+              // activeChatId is non-null whenever messages exist (chat-mode only). Without
+              // the persona nothing could be resent, so nothing is deleted either.
+              if (!activeChatId || !effectivePersona) return;
               setStreamBlock(null);
               // A typed stop shows the in-stream notice; anything else keeps its old path.
               const stopIfBlocked = (e: unknown): void => {
