@@ -24,6 +24,12 @@ pnpm --filter @chatsundere/user-client test:browser # real-browser smoke test (n
 pnpm --filter @chatsundere/user-client generate:icons   # regenerate placeholder PWA icons
 ```
 
+`scripts/touch-targets.mjs` is a dev-only touch-target sweep (not run in CI). Against a running dev server it measures every interactive element below 44 px and every overlapping hit area at 380 × 800, and exits 1 when hit areas overlap:
+
+```bash
+NODE_PATH=$(npm root -g) node apps/user-client/scripts/touch-targets.mjs --url http://localhost:5173 --out /tmp/touch
+```
+
 ## Environment
 
 The user-client requires **no** environment to function. Optional hints:
