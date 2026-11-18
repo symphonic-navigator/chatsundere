@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { type BuildPromptInputs, buildPrompt } from '@chatsundere/llm-unified';
 import { describe, expect, it } from 'vitest';
-import type { MessageRow } from '../../src/boot/client-data-db.js';
+import type { AttachmentRow, MessageRow } from '../../src/boot/client-data-db.js';
 import { isContextMessage } from '../../src/lib/content-blocks.js';
 import { wireTokens } from '../../src/lib/context-window.js';
 import { buildEngineWireMessages } from '../../src/lib/stream-engine.js';
-import { sentAtOf } from '../../src/lib/time-awareness.js';
+import { sentAtOf, userTurnStamp } from '../../src/lib/time-awareness.js';
 import { estimateTokens } from '../../src/lib/token-estimator.js';
 import { estimateReplayTokens } from '../../src/lib/tool-replay.js';
 
@@ -71,6 +71,28 @@ describe('stamped token accounting', () => {
     );
     expect(JSON.stringify(wire)).toContain('<sent>');
     expect(gauge).toBe(wire.reduce((s, m) => s + wireTokens(m), 0));
+  });
+
+  it('counts the stamp part of a multimodal turn with its trailing newline', () => {
+    const u1 = chat[3] as MessageRow;
+    const img = {
+      id: 'img1',
+      chatId: 'c1',
+      messageId: 'u1',
+      origin: 'upload',
+      kind: 'image',
+      fileName: 'a.jpg',
+      mime: 'image/jpeg',
+      order: 0,
+      state: 'active',
+      createdAt: u1.createdAt,
+      updatedAt: u1.createdAt,
+    } satisfies AttachmentRow;
+    const byMessage = new Map([['u1', [img]]]);
+    const stamp = userTurnStamp(u1) as string;
+    expect(estimateReplayTokens(u1, new Map(), byMessage, true)).toBe(
+      estimateReplayTokens(u1, new Map(), byMessage, false) + estimateTokens(`${stamp}\n`),
+    );
   });
 
   it('counts nothing extra when the flag is off', () => {

@@ -308,13 +308,13 @@ export function estimateReplayTokens(
     const attachments = attachmentsByMessage?.get(row.id) ?? [];
     const stamp = stamped ? userTurnStamp(row) : undefined;
     // Mirror prependStamp: a text-only turn carries the stamp in the same
-    // string, a turn with attachments as its own leading part.
+    // string, a turn with attachments as its own leading part (newline included).
     let text = estimateTokens(flat);
     if (stamp !== undefined) {
       text =
         attachments.length === 0
           ? estimateTokens(`${stamp}\n${flat}`)
-          : text + estimateTokens(stamp);
+          : text + estimateTokens(`${stamp}\n`);
     }
     return text + estimateAttachmentTokens(attachments);
   }

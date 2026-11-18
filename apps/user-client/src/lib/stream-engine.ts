@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import {
   type Offering,
   type PromptTimeInput,
@@ -15,7 +17,6 @@ import {
   resolveModelInstructions,
   streamCompletion,
 } from '@chatsundere/llm-unified';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { uuidv7 } from 'uuidv7';
 import type {
   ChatRow,
@@ -240,7 +241,11 @@ function promptTimeInput(
 ): PromptTimeInput | undefined {
   if (job === 'chat') return { mode: 'chat' };
   if (!args.openerAt) return undefined;
-  const last = args.persona.lastInteractionAt;
+  // The Dexie v28 backfill stamped chatless personas with their own createdAt,
+  // so a value at or before creation records no conversation; reading it as one
+  // would have the opener invent a past talk.
+  const raw = args.persona.lastInteractionAt;
+  const last = raw !== undefined && raw > args.persona.createdAt ? raw : undefined;
   return {
     mode: 'greeting',
     now: args.openerAt.createdAt,

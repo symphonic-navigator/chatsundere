@@ -276,7 +276,7 @@ describe('stamped wire — content', () => {
     ];
     const wire = await turnN({ userMessageText: parts });
     expect(wire[wire.length - 1]?.content).toEqual([
-      { type: 'text', text: '<sent>Sat 21 Nov 2026, 21:14</sent>' },
+      { type: 'text', text: '<sent>Sat 21 Nov 2026, 21:14</sent>\n' },
       ...parts,
     ]);
   });
@@ -290,7 +290,7 @@ describe('stamped wire — content', () => {
       (m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url'),
     );
     expect(u1Wire?.content).toEqual([
-      { type: 'text', text: '<sent>Wed 18 Nov 2026, 21:15</sent>' },
+      { type: 'text', text: '<sent>Wed 18 Nov 2026, 21:15</sent>\n' },
       img,
       { type: 'text', text: 'u1 text' },
     ]);
@@ -340,6 +340,31 @@ describe('opener (greeting job)', () => {
     expect(sys).not.toContain(TIME_STAMP_INSTRUCTION);
     expect(JSON.stringify(wire)).not.toContain('<sent');
   });
+
+  // The Dexie v28 backfill set lastInteractionAt = createdAt for personas with
+  // no chats; such a value records no conversation and must not read as one.
+  for (const [label, last] of [
+    ['equal to the persona creation', openerAt.createdAt - 30 * 24 * 60 * MIN],
+    ['earlier than the persona creation', openerAt.createdAt - 31 * 24 * 60 * MIN],
+  ] as const) {
+    it(`names no time away when lastInteractionAt is ${label}`, async () => {
+      const wire = await wireOf(
+        args({
+          job: 'greeting',
+          openerAt,
+          persona: {
+            ...persona,
+            timeAwareness: true,
+            createdAt: openerAt.createdAt - 30 * 24 * 60 * MIN,
+            lastInteractionAt: last,
+          },
+        }),
+      );
+      const sys = wire[0]?.content as string;
+      expect(sys).toContain("It is Saturday, 21 November 2026, 09:02 in the user's local time.");
+      expect(sys).not.toContain('last talked');
+    });
+  }
 
   it('carries no date when the switch is off', async () => {
     const wire = await wireOf(

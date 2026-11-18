@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useSessionStore } from '@chatsundere/ui-shared';
 import { ChevronDown } from 'lucide-react';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AdultModeToggle } from '../components/AdultModeToggle.js';

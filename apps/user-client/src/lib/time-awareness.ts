@@ -44,7 +44,10 @@ export function prependStamp(
   stamp: string,
 ): string | WireContentPart[] {
   if (typeof content === 'string') return `${stamp}\n${content}`;
-  return [{ type: 'text', text: stamp }, ...content];
+  // The part carries its own newline because some adapters (Ollama's native
+  // API) join text parts with '' — without it the model would read
+  // `</sent>Hello`, unlike the `</sent>\nHello` of a string turn.
+  return [{ type: 'text', text: `${stamp}\n` }, ...content];
 }
 
 /** Whether a stored row carries a `<sent>` stamp on the wire: only user turns

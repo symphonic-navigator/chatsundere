@@ -183,6 +183,20 @@ describe('chatToMarkdown', () => {
     expect(out).not.toContain('sigh');
   });
 
+  it('names a tool by the display name its pill shows, the raw name otherwise', () => {
+    const m = msg('persona', at(14, 18, 3), [
+      { type: 'pill', pillId: 'p1' },
+      { type: 'pill', pillId: 'p2' },
+    ]);
+    const pills = new Map([
+      ['p1', pill('p1', 'tool-call', { name: 'write_memory_entry' })],
+      ['p2', pill('p2', 'tool-call', { name: 'some_mcp_tool' })],
+    ]);
+    const out = chatToMarkdown(input({ messages: [m], pills }));
+    expect(out).toContain('*[Used tool: Remembered]*\n\n*[Used tool: some_mcp_tool]*');
+    expect(out).not.toContain('write_memory_entry');
+  });
+
   it('marks generated images, one line each', () => {
     const m = msg('persona', at(14, 18, 3), [
       { type: 'pill', pillId: 'g1' },
@@ -253,6 +267,29 @@ describe('chatToMarkdown', () => {
     );
     expect(out).toContain('title: "Plans: \\"big\\" ones"\n');
     expect(out).toContain('persona: "Yes"\n');
+  });
+
+  for (const title of [
+    '1e3',
+    '0x1F',
+    '1_000',
+    '+1',
+    '-1 day',
+    '.5',
+    '12 Angry Men',
+    '2026-11-18',
+  ]) {
+    it(`quotes a title starting with a digit, sign or point: ${title}`, () => {
+      const out = chatToMarkdown(input({ chat: { title, createdAt: at(14, 18, 3) } }));
+      expect(out).toContain(`title: ${JSON.stringify(title)}\n`);
+    });
+  }
+
+  it('leaves an ordinary title plain', () => {
+    const out = chatToMarkdown(
+      input({ chat: { title: 'Harbour walk', createdAt: at(14, 18, 3) } }),
+    );
+    expect(out).toContain('title: Harbour walk\n');
   });
 
   it('dates the start from the earliest message when it predates the chat row', () => {

@@ -52,7 +52,7 @@ describe('prependStamp', () => {
   it('adds the stamp as a leading text part ahead of attachments', () => {
     const img = { type: 'image_url' as const, image_url: { url: 'data:x' } };
     expect(prependStamp([img, { type: 'text', text: 'look' }], '<sent>X</sent>')).toEqual([
-      { type: 'text', text: '<sent>X</sent>' },
+      { type: 'text', text: '<sent>X</sent>\n' },
       img,
       { type: 'text', text: 'look' },
     ]);

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import {
   type Offering,
   type ProviderConfig,
@@ -19,7 +21,6 @@ import { getClientDataDb } from '../boot/client-data-db.js';
 import { flattenAnswerText, isContextMessage } from '../lib/content-blocks.js';
 import { resolveContextWindow } from '../lib/context-window.js';
 import { loadReplayAttachments, loadReplayPills } from '../lib/replay-pills.js';
-// SPDX-License-Identifier: AGPL-3.0-only
 import { resolveTimeAwareness } from '../lib/time-awareness.js';
 import { estimateTokens } from '../lib/token-estimator.js';
 import { estimateReplayTokens, toolTranscriptRefs } from '../lib/tool-replay.js';

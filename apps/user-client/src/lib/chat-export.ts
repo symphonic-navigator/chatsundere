@@ -8,6 +8,7 @@ import type {
 } from '../boot/client-data-db.js';
 import { flattenAnswerText } from './content-blocks.js';
 import { displayPlainText } from './teal/display-plain-text.js';
+import { toolDisplayName } from './tool-display-name.js';
 
 /** Everything `chatToMarkdown` needs, already loaded: the builder never touches the DB. */
 export interface ChatExportInput {
@@ -67,9 +68,10 @@ export function chatExportTitle(chat: ChatExportInput['chat'], personaName: stri
 /** A front-matter value, double-quoted (JSON is valid YAML) wherever a plain scalar would misparse. */
 function yamlValue(value: string): string {
   const v = value.replace(/\s+/g, ' ').trim();
-  const plain =
-    /^[\p{L}\p{N}][^:#"'\\]*$/u.test(v) &&
-    !/^(?:true|false|yes|no|on|off|null|~|[-+.\d]+)$/i.test(v);
+  // Anything opening like a number is quoted outright: YAML resolvers read
+  // `1e3`, `0x1F` and `1_000` as numbers, and listing every numeric form is a
+  // losing game. A letter start leaves only the boolean and null words.
+  const plain = /^\p{L}[^:#"'\\]*$/u.test(v) && !/^(?:true|false|yes|no|on|off|null|y|n)$/i.test(v);
   return plain ? v : JSON.stringify(v);
 }
 
@@ -86,7 +88,7 @@ function pillLines(row: PillRow | undefined): string[] {
   if (name === 'generate_image' && Array.isArray(p?.artefactIds) && p.artefactIds.length > 0) {
     return p.artefactIds.map(() => marker('Generated image'));
   }
-  return [marker(`Used tool: ${name}`)];
+  return [marker(`Used tool: ${toolDisplayName(name)}`)];
 }
 
 /** The body of one message as chunks (paragraphs or marker lines), in the order the chat shows them. */
