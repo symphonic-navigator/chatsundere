@@ -63,8 +63,10 @@ import { estimateReplayTokens } from '../../../lib/tool-replay.js';
 import { collectTags } from '../../../lib/treasury-filter.js';
 import { useDictation } from '../../../lib/voice/dictation/use-dictation.js';
 import { REDEMPTION_MS_DEFAULT } from '../../../lib/voice/dictation/vad-presets.js';
+import { useLiveVoiceIdle } from '../../../lib/voice/live/use-live-voice-idle.js';
 import { useLiveVoice } from '../../../lib/voice/live/use-live-voice.js';
 import { useMonologuePlayback } from '../../../lib/voice/use-monologue-playback.js';
+import { useScreenWakeLock } from '../../../lib/voice/use-screen-wake-lock.js';
 import { useVoicePlayback } from '../../../lib/voice/use-voice-playback.js';
 import { useCurrentChatStore } from '../../../state/current-chat.store.js';
 import { useEffectiveChatMode, useIsDesktop } from '../../../state/effective-chat-mode.js';
@@ -772,6 +774,20 @@ export function ChatPage(): JSX.Element {
   useEffect(() => {
     if (isLiveVoice && isPinned && inputFocused) liveVoice.hold();
   }, [isLiveVoice, isPinned, inputFocused, liveVoice]);
+
+  // Keep the screen awake while voice is sounding or live voice is open. Paused
+  // read-aloud lets go; a live session left listening for 5 minutes lets go too,
+  // so a forgotten one locks on the phone's normal timeout.
+  const liveVoiceIdle = useLiveVoiceIdle(liveVoice.floor, isLiveVoice);
+  useScreenWakeLock(
+    'read-aloud',
+    voice.transportState === 'speaking' || voice.transportState === 'waiting',
+  );
+  useScreenWakeLock(
+    'monologue',
+    monologue.transportState === 'speaking' || monologue.transportState === 'waiting',
+  );
+  useScreenWakeLock('live-voice', isLiveVoice && !liveVoiceIdle);
 
   // Stop any in-flight inner-monologue when live voice starts — two audio paths must not overlap.
   useEffect(() => {
