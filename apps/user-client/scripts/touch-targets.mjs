@@ -11,7 +11,13 @@
  * a provider and a persona, the chat's cockpit and quick menus, the voice
  * notes of an account without a voice provider and, last, the login screen
  * asking for the passphrase, with its recovery and start-over pages) and
- * reports:
+ * reports. A second chat asks to add an MCP server: the mocked reply calls
+ * `add_mcp_connector` with the user's link, so the connector card renders
+ * (proposed, then dismissed with *Not now*), and *Check & add* opens the
+ * prefilled Add-server screen against a mocked server that asks for an OAuth
+ * sign-in (checking, then the sign-in settings, their *More settings* and
+ * *Use a key instead*, the prefilled form).
+ * The sweep then reports:
  *
  *   - undersized targets: every interactive element whose hit area is below
  *     44 px on either side. The hit area is the element's box united with its
@@ -86,13 +92,61 @@ function sseBody(text) {
   return `${chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')}data: [DONE]\n\n`;
 }
 
+/** An OpenAI-style SSE body that streams one call of `name`, its arguments in two deltas. */
+function sseToolCall(name, args) {
+  const json = JSON.stringify(args);
+  const half = Math.ceil(json.length / 2);
+  const delta = (tc) => ({
+    id: 'gen-sweep',
+    object: 'chat.completion.chunk',
+    model: 'openai/gpt-4o',
+    choices: [{ index: 0, delta: { tool_calls: [tc] } }],
+  });
+  const chunks = [
+    delta({
+      index: 0,
+      id: 'call_sweep_connector',
+      type: 'function',
+      function: { name, arguments: json.slice(0, half) },
+    }),
+    delta({ index: 0, function: { arguments: json.slice(half) } }),
+    {
+      id: 'gen-sweep',
+      object: 'chat.completion.chunk',
+      model: 'openai/gpt-4o',
+      choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 12, completion_tokens: 8, total_tokens: 20 },
+    },
+  ];
+  return `${chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('')}data: [DONE]\n\n`;
+}
+
+// The MCP server the connector chat proposes, and the authorisation server it names.
+const CONNECTOR_URL = 'https://mcp.sweep-tools.com/mcp';
+const CONNECTOR_ORIGIN = 'https://mcp.sweep-tools.com';
+const AUTH_ORIGIN = 'https://auth.sweep-tools.com';
+
+/** True when the last message of a chat request is the user's and carries the connector link. */
+function asksForConnector(body) {
+  const last = Array.isArray(body.messages) ? body.messages.at(-1) : null;
+  return last?.role === 'user' && JSON.stringify(last.content ?? '').includes(CONNECTOR_URL);
+}
+
 let replyCount = 0;
 async function mockOpenRouter(ctx) {
   await ctx.route('https://openrouter.ai/**', (route) => {
     const req = route.request();
     if (req.method() === 'POST' && /\/chat\/completions/.test(req.url())) {
-      replyCount++;
       const body = JSON.parse(req.postData() || '{}');
+      // The reply's first round calls the tool; the round after its result answers in words.
+      if (body.stream !== false && asksForConnector(body)) {
+        return route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+          body: sseToolCall('add_mcp_connector', { url: CONNECTOR_URL }),
+        });
+      }
+      replyCount++;
       if (body.stream === false) {
         return route.fulfill({
           status: 200,
@@ -122,6 +176,62 @@ async function mockOpenRouter(ctx) {
       contentType: 'application/json',
       body: JSON.stringify({ data: [{ id: 'openai/gpt-4o' }], credits: 1 }),
     });
+  });
+}
+
+/**
+ * A public MCP server that asks for an OAuth sign-in (MCP authorisation spec): a 401 with
+ * a protected-resource-metadata pointer, that document, and the authorisation server's
+ * metadata, all with the CORS headers a direct browser check needs. The probe answers
+ * after a pause, so the check's own screen can be measured while it runs.
+ */
+async function mockMcpServer(ctx) {
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': '*',
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-expose-headers': 'WWW-Authenticate',
+  };
+  const json = (route, value) =>
+    route.fulfill({
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+  await ctx.route(`${CONNECTOR_ORIGIN}/**`, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (req.url().includes('/.well-known/oauth-protected-resource')) {
+      return json(route, {
+        resource: CONNECTOR_URL,
+        authorization_servers: [AUTH_ORIGIN],
+        resource_name: 'Sweep Tools',
+      });
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+    return route.fulfill({
+      status: 401,
+      headers: {
+        ...cors,
+        'content-type': 'application/json',
+        'www-authenticate': `Bearer resource_metadata="${CONNECTOR_ORIGIN}/.well-known/oauth-protected-resource/mcp"`,
+      },
+      body: '{}',
+    });
+  });
+  await ctx.route(`${AUTH_ORIGIN}/**`, (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (req.url().includes('/.well-known/oauth-authorization-server')) {
+      return json(route, {
+        issuer: AUTH_ORIGIN,
+        authorization_endpoint: `${AUTH_ORIGIN}/authorize`,
+        token_endpoint: `${AUTH_ORIGIN}/token`,
+        registration_endpoint: `${AUTH_ORIGIN}/register`,
+        code_challenge_methods_supported: ['S256'],
+      });
+    }
+    return route.fulfill({ status: 404, headers: cors, body: '' });
   });
 }
 
@@ -362,6 +472,7 @@ async function boot(baseUrl, screens, notes) {
     isMobile: true,
   });
   await mockOpenRouter(ctx);
+  await mockMcpServer(ctx);
   const p = await ctx.newPage();
   const cdp = await ctx.newCDPSession(p);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { bottom: 34, top: 47 } });
@@ -639,6 +750,40 @@ async function sweep(baseUrl) {
       await snap('/app/history (bookmarks)');
     });
   }
+
+  // A chat that asks to add an MCP server: the card, then the Add-server screens it opens.
+  await step(notes, 'connector card', async () => {
+    await go(p, `/app/persona/${pid}`);
+    await p.getByRole('button', { name: 'New Chat' }).click();
+    await p.waitForTimeout(2000);
+    await p
+      .locator('textarea.cockpit-input')
+      .fill(`Please add this MCP server so you can use its tools: ${CONNECTOR_URL}`);
+    await p.getByRole('button', { name: 'Send', exact: true }).click();
+    await p.locator('.connector-pill').waitFor({ timeout: 15000 });
+    await p.getByRole('button', { name: /check & add/i }).waitFor({ timeout: 5000 });
+    await p.waitForTimeout(1500);
+    await p.locator('.connector-pill').scrollIntoViewIfNeeded();
+    await p.waitForTimeout(400);
+    await snap('/app/chat/:chatId (connector card)');
+    await p.getByRole('button', { name: 'Not now', exact: true }).click();
+    await p.getByRole('button', { name: /add anyway/i }).waitFor({ timeout: 5000 });
+    await p.waitForTimeout(400);
+    await snap('/app/chat/:chatId (connector card, not now)');
+    await p.getByRole('button', { name: /add anyway/i }).click();
+    await p.getByRole('button', { name: /^checking /i }).waitFor({ timeout: 5000 });
+    await snap('/app/integrations/new (from the card, checking)');
+    await p.getByRole('button', { name: 'More settings' }).waitFor({ timeout: 15000 });
+    await p.waitForTimeout(600);
+    await snap('/app/integrations/new (from the card, sign-in required)');
+    await p.getByRole('button', { name: 'More settings' }).click();
+    await p.waitForTimeout(600);
+    await snap('/app/integrations/new (from the card, more settings)');
+    await p.getByRole('button', { name: 'Use a key instead' }).click();
+    await p.getByRole('button', { name: 'Test connection' }).waitFor({ timeout: 5000 });
+    await p.waitForTimeout(600);
+    await snap('/app/integrations/new (from the card, key form)');
+  });
 
   // Last, since unlocking would replace the session: the login screen the app
   // sends a session without a master key to, with "Not now" for a signed-in user.

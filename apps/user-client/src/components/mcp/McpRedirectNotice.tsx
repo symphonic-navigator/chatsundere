@@ -31,7 +31,7 @@ export function McpRedirectNotice({ notice }: { notice: McpRedirectNoticePayload
       <span>{mcpRedirectNoticeLine(notice.serverName)}</span>
       <Link
         to={href}
-        className="cs-btn inline-flex min-h-[44px] max-w-full items-center [overflow-wrap:anywhere]"
+        className="cs-btn inline-flex max-w-full items-center [overflow-wrap:anywhere]"
       >
         {gone ? 'Open My Integrations' : `Open ${notice.serverName}`}
       </Link>

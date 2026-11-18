@@ -8,7 +8,7 @@ import type { McpServerRow } from '../../../boot/client-data-db.js';
 import { CheckServerStep, SuggestedInChat } from '../../../components/mcp/CheckServerStep.js';
 import { OAuthConnectionPanel } from '../../../components/mcp/OAuthConnectionPanel.js';
 import { OAuthSignInFlow } from '../../../components/mcp/OAuthSignInFlow.js';
-import { SignInSettings } from '../../../components/mcp/SignInSettings.js';
+import { CHECKBOX_ROW_CLASS, SignInSettings } from '../../../components/mcp/SignInSettings.js';
 import {
   SAVING_LATER,
   addedToast,
@@ -930,7 +930,7 @@ function IntegrationServerForm({
           </>
         ) : null}
 
-        <label className="flex items-center gap-2 text-xs text-paper-soft">
+        <label className={CHECKBOX_ROW_CLASS}>
           <input
             type="checkbox"
             checked={onByDefault}
@@ -943,7 +943,7 @@ function IntegrationServerForm({
           On by default
         </label>
 
-        <label className="flex items-center gap-2 text-xs text-paper-soft">
+        <label className={CHECKBOX_ROW_CLASS}>
           <input
             type="checkbox"
             checked={autoRun}
@@ -957,7 +957,7 @@ function IntegrationServerForm({
         </label>
 
         <label
-          className="flex items-center gap-2 text-xs text-paper-soft"
+          className={CHECKBOX_ROW_CLASS}
           title="Your browser connects straight to the server, which must allow direct browser access (CORS)."
         >
           <input
