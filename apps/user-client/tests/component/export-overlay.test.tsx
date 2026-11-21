@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 // Spy references hoisted so vi.mock factories can reference them.
-const { exportPersonaMock, triggerDownloadMock } = vi.hoisted(() => ({
-  exportPersonaMock: vi.fn(async () => new Blob(['x'])),
+const { exportPersonaMock, triggerDownloadMock, missing, toastShow } = vi.hoisted(() => ({
+  exportPersonaMock: vi.fn(async (..._args: unknown[]) => new Blob(['x'])),
   triggerDownloadMock: vi.fn(),
+  missing: { n: 0 },
+  toastShow: vi.fn(),
 }));
 
 vi.mock('../../src/data/chatsundere-export.js', () => ({
-  exportPersona: exportPersonaMock,
+  exportPersonaWithReport: async (...args: unknown[]) => ({
+    blob: await exportPersonaMock(...args),
+    missingFiles: missing.n,
+  }),
+  missingFilesNotice: (n: number) =>
+    `${n} files could not be included because they are not on this device.`,
   exportLibrary: vi.fn(),
 }));
 
@@ -20,7 +27,7 @@ vi.mock('../../src/lib/download.js', async (importOriginal) => {
 
 // Stub toast so store state does not bleed between tests.
 vi.mock('../../src/state/toast.store.js', () => ({
-  toastStore: { show: vi.fn() },
+  toastStore: { show: toastShow },
   useToastStore: vi.fn(),
 }));
 
@@ -75,11 +82,28 @@ describe('ExportOverlay', () => {
       { memory: true, artefacts: true, images: false },
       'secret',
     );
-    await Promise.resolve();
-    expect(triggerDownloadMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('-chatsundere-encrypted.tar.gz'),
+    await waitFor(() =>
+      expect(triggerDownloadMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('-chatsundere-encrypted.tar.gz'),
+      ),
     );
+  });
+
+  it('says out loud how many files had to stay behind', async () => {
+    toastShow.mockClear();
+    missing.n = 2;
+    render(<ExportOverlay personaId="p5" personaName="Kai" onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /^export$/i }));
+    await waitFor(() => expect(toastShow).toHaveBeenCalled());
+    expect(toastShow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: 'warn',
+        message:
+          'Persona exported. 2 files could not be included because they are not on this device.',
+      }),
+    );
+    missing.n = 0;
   });
 
   it('disables Export while the passwords do not match', () => {

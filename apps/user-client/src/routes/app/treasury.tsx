@@ -33,7 +33,7 @@ function typeFromParam(raw: string | null): TreasuryType {
 export function Treasury(): JSX.Element {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
-  const { data: rows = [] } = useAllArtefacts();
+  const { data: rows = [], isSuccess: rowsLoaded } = useAllArtefacts();
   const personas = useFilteredPersonas();
   const { onHelp, helpOverlay } = useHelp('treasury');
 
@@ -128,6 +128,14 @@ export function Treasury(): JSX.Element {
     setOpenId(null);
     if (search.has('open')) mirrorUrl({ open: null });
   }
+
+  // An `open` id that is not among the loaded, visible rows (deleted, hidden in SFW,
+  // filtered away) is dropped, so a later tab switch never pops the lightbox open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closeLightbox reads only setters and the URL
+  useEffect(() => {
+    if (openId === null || !rowsLoaded || !personas.data) return;
+    if (openIndex < 0) closeLightbox();
+  }, [openId, openIndex, rowsLoaded, personas.data]);
 
   function toggleSelect(id: string): void {
     setSelected((prev) => {

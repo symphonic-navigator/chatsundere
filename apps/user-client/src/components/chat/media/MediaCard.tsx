@@ -35,11 +35,14 @@ export function MediaPlayer({
   artefact,
   title,
   compact = false,
+  menu: withMenu = true,
   onOpenInTreasury,
 }: {
   artefact: ArtefactRow;
   title: string;
   compact?: boolean;
+  /** False where the surrounding surface already offers Download (the lightbox toolbar). */
+  menu?: boolean;
   onOpenInTreasury?: () => void;
 }): JSX.Element {
   const fetched = useBlobBytes('artefacts', artefact.id, 'blob');
@@ -53,7 +56,7 @@ export function MediaPlayer({
         : mediaCopy.downloading;
   const retry = bytes === null ? fetched.retry : undefined;
 
-  const menu = (
+  const menu = withMenu ? (
     <MediaMenu
       title={title}
       downloadDisabledReason={unavailable}
@@ -62,7 +65,7 @@ export function MediaPlayer({
       }}
       {...(onOpenInTreasury ? { onOpenInTreasury } : {})}
     />
-  );
+  ) : null;
   const note = (
     <>
       {unavailable !== null ? (

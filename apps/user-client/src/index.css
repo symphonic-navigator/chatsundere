@@ -2953,6 +2953,12 @@ h1 {
   padding: 0.5rem 0.75rem 0;
 }
 
+/* Why a toolbar action is unavailable, as visible text (titles never show on touch). */
+.lightbox-btn-reason {
+  align-self: center;
+  font-size: 11px;
+  color: var(--color-paper-soft);
+}
 .lightbox-btn {
   font-size: 11px;
   font-family: var(--font-mono);

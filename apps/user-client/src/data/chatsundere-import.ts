@@ -23,8 +23,13 @@ import {
   type ExportedVector,
   readKnowledgePack,
 } from '../lib/chatsundere-transfer/knowledge-pack.js';
-import { readPersonaPack, thumbBlobKey } from '../lib/chatsundere-transfer/persona-pack.js';
+import {
+  readPersonaPack,
+  thumbBlobKey,
+  withoutVaultFields,
+} from '../lib/chatsundere-transfer/persona-pack.js';
 import { resolveVectorStrategy } from '../lib/chatsundere-transfer/vector-strategy.js';
+import { isAllowedMediaMime } from '../mcp/media-extract.js';
 import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 
@@ -238,7 +243,8 @@ export async function importPersonaPack(
   const attachmentRows: AttachmentRow[] = payload.attachments.map((att) => {
     const blobEntry = payload.blobs.get(att.id);
     return {
-      ...att,
+      // Refs into the source account's vault never carry over (packs before the export stripped them).
+      ...withoutVaultFields(att),
       id: remap.fresh(att.id),
       chatId: remap.map(att.chatId) ?? att.chatId,
       // messageId is null while pending (pre-send); remap only when non-null.
@@ -256,22 +262,29 @@ export async function importPersonaPack(
   // ── Remap and write artefacts ─────────────────────────────────────────────
   const artefactRows = payload.artefacts.map((art) => {
     const blobEntry = payload.blobs.get(art.id);
-    const media = art.kind === 'audio' || art.kind === 'video';
+    const mediaKind = art.kind === 'audio' || art.kind === 'video' ? art.kind : null;
+    const media = mediaKind !== null;
     const thumbEntry = media ? payload.blobs.get(thumbBlobKey(art.id)) : undefined;
+    // The extension cannot tell audio/webm from video/webm, so the row's mime wins,
+    // but only from the allow-list; a pack is untrusted input.
+    const mediaMime = mediaKind ? importedMediaMime(mediaKind, art.mime, blobEntry?.mime) : null;
+    const blob =
+      media && mediaMime === null
+        ? undefined
+        : blobEntry
+          ? new Blob([new Uint8Array(blobEntry.bytes)], { type: mediaMime ?? blobEntry.mime })
+          : // Blob fields serialise to {} in JSON — guard against poison from pre-fix packs (I2).
+            !media && art.blob instanceof Blob
+            ? art.blob
+            : undefined;
     return {
-      ...art,
+      // Refs into the source account's vault never carry over (packs before the export stripped them).
+      ...withoutVaultFields(art),
       id: remap.fresh(art.id),
       chatId: remap.map(art.chatId) ?? art.chatId,
       personaId,
-      // Blob fields serialise to {} in JSON — guard against poison from pre-fix packs (I2).
-      blob: blobEntry
-        ? new Blob([new Uint8Array(blobEntry.bytes)], {
-            // The extension cannot tell audio/webm from video/webm; the row can.
-            type: media ? art.mime : blobEntry.mime,
-          })
-        : art.blob instanceof Blob
-          ? art.blob
-          : undefined,
+      ...(media ? { mime: mediaMime ?? 'application/octet-stream' } : {}),
+      blob,
       thumbBlob: thumbEntry
         ? new Blob([new Uint8Array(thumbEntry.bytes)], { type: thumbEntry.mime })
         : art.thumbBlob instanceof Blob
@@ -423,6 +436,22 @@ export async function importKnowledgePack(
 }
 
 // ── Private helper ────────────────────────────────────────────────────────────
+
+/**
+ * The mime an imported audio or video file is stored under: the row's, else the one
+ * its pack extension implies, each only when allowed and of the row's kind. `null`
+ * drops the bytes, so nothing outside the allow-list is ever played.
+ */
+function importedMediaMime(
+  kind: 'audio' | 'video',
+  rowMime: string,
+  entryMime: string | undefined,
+): string | null {
+  for (const m of [rowMime, entryMime]) {
+    if (m && isAllowedMediaMime(m) && m.startsWith(`${kind}/`)) return m;
+  }
+  return null;
+}
 
 /**
  * Rewrite artefact id references inside a pill payload so they resolve to the

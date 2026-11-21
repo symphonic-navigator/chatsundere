@@ -40,6 +40,20 @@ export function thumbBlobKey(artefactId: string): string {
   return `${artefactId}.thumb`;
 }
 
+/**
+ * The vault bookkeeping of a row: refs into the source account's blob store and
+ * its oversize sentinels. None of it may travel, or an imported row would point
+ * at blobs the importing account cannot open.
+ */
+const VAULT_FIELDS = ['blobRef', 'thumbBlobRef', 'blobOversized', 'thumbBlobOversized'] as const;
+
+/** A copy of `row` without its vault bookkeeping (see {@link VAULT_FIELDS}). */
+export function withoutVaultFields<T extends object>(row: T): T {
+  const copy = { ...row } as Record<string, unknown>;
+  for (const f of VAULT_FIELDS) delete copy[f];
+  return copy as T;
+}
+
 const enc = new TextEncoder();
 
 function json(value: unknown): Uint8Array {

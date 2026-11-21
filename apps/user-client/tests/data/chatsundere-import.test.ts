@@ -20,8 +20,13 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
-import { exportPersona } from '../../src/data/chatsundere-export.js';
+import { exportPersona, exportPersonaWithReport } from '../../src/data/chatsundere-export.js';
 import { importPersonaPack } from '../../src/data/chatsundere-import.js';
+import {
+  readPersonaPack,
+  writePersonaPack,
+} from '../../src/lib/chatsundere-transfer/persona-pack.js';
+import { _resetBlobFetchForTests, _setBlobFetchDeps } from '../../src/sync/blob-fetch.js';
 
 describe('persona export → import round-trip', () => {
   beforeEach(async () => {
@@ -524,5 +529,182 @@ describe('persona export → import round-trip — audio and video artefacts', (
       .equals(chats[0]?.id ?? '')
       .toArray();
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe('persona export — files whose bytes live only in the vault', () => {
+  const vaultBytes = new Uint8Array([7, 7, 7, 7]);
+
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+    const db = getClientDataDb();
+    await db.personas.add({
+      id: 'p-v',
+      name: 'Vault',
+      providerId: '',
+      modelId: '',
+      mcpOverrides: {},
+      libraryIds: [],
+    } as never);
+    await db.chats.add({
+      id: 'c-v',
+      personaId: 'p-v',
+      title: 'v',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 2,
+      resolvedMindspaceId: '',
+      libraryIds: [],
+      draftInput: '',
+      bookmarkedMessageCount: 0,
+    } satisfies ChatRow);
+    const base = {
+      chatId: 'c-v',
+      personaId: 'p-v',
+      projectId: null,
+      origin: 'generated' as const,
+      content: '',
+      tags: [],
+      favourite: false,
+      createdAt: 1,
+      updatedAt: 1,
+      kind: 'audio' as const,
+      format: 'audio' as const,
+      mime: 'audio/mpeg',
+      mediaMeta: { key: 'gen:x', durationMs: 1000, serverName: 'S', toolName: 't' },
+    };
+    // Synced from another device and never played here: a ref, no bytes.
+    await db.artefacts.add({
+      ...base,
+      id: 'in-vault',
+      title: 'In the vault',
+      fileName: 'in-vault.mp3',
+      blobRef: { blobId: 'blob-in-vault', bytes: 40 },
+    } satisfies ArtefactRow);
+    // Too large for the server: it only ever lived on the device that saved it.
+    await db.artefacts.add({
+      ...base,
+      id: 'device-only',
+      title: 'Device only',
+      fileName: 'device-only.mp3',
+      blobOversized: true,
+    } satisfies ArtefactRow);
+    // Played here once and pushed: bytes and a ref both present.
+    await db.artefacts.add({
+      ...base,
+      id: 'here',
+      title: 'Here',
+      fileName: 'here.mp3',
+      blob: new Blob([new Uint8Array([1, 2])], { type: 'audio/mpeg' }),
+      blobRef: { blobId: 'blob-here', bytes: 30 },
+      thumbBlobRef: { blobId: 'thumb-here', bytes: 30 },
+    } satisfies ArtefactRow);
+    _setBlobFetchDeps({
+      getMk: () => ({}) as never,
+      getBlob: async (ref) => {
+        if (ref.blobId !== 'blob-in-vault') throw new Error('not in this vault');
+        return vaultBytes;
+      },
+      openBlob: async (_mk, _id, body) => body,
+      invalidate: () => {},
+    });
+  });
+
+  afterEach(async () => {
+    _resetBlobFetchForTests();
+    await _resetClientDataDbForTests();
+  });
+
+  it('fetches bytes from the vault, counts what it cannot have, and carries no vault refs', async () => {
+    const { blob, missingFiles } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    expect(missingFiles).toBe(1);
+
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      expect(art.blobRef).toBeUndefined();
+      expect(art.thumbBlobRef).toBeUndefined();
+      expect(art.blobOversized).toBeUndefined();
+    }
+
+    const res = await importPersonaPack(blob, 'Vault (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    const byTitle = new Map(rows.map((r) => [r.title, r]));
+    const fetched = byTitle.get('In the vault');
+    expect([...new Uint8Array((await fetched?.blob?.arrayBuffer()) ?? new ArrayBuffer(0))]).toEqual(
+      [...vaultBytes],
+    );
+    // No imported row may point at the source account's vault blobs.
+    for (const r of rows) {
+      expect(r.blobRef).toBeUndefined();
+      expect(r.thumbBlobRef).toBeUndefined();
+      expect(r.blobOversized).toBeUndefined();
+    }
+  });
+
+  it('strips vault refs on import too, for packs written before the export did', async () => {
+    const { blob } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      art.blobRef = { blobId: 'source-vault', bytes: 1 };
+      art.blobOversized = true;
+    }
+    const legacy = await writePersonaPack(parsed.payload);
+    const res = await importPersonaPack(legacy, 'Vault (old pack)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.blobRef).toBeUndefined();
+      expect(r.blobOversized).toBeUndefined();
+    }
+  });
+
+  it('takes a media mime only from the allow-list, falling back to the pack extension or dropping the bytes', async () => {
+    const { blob } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      // "Here" keeps its .mp3 entry, so the extension still says audio/mpeg.
+      if (art.title === 'Here') art.mime = 'text/html';
+      // "In the vault" claims to be video, which its .mp3 entry cannot back up.
+      if (art.title === 'In the vault') {
+        art.kind = 'video';
+        art.format = 'video';
+        art.mime = 'image/svg+xml';
+      }
+    }
+    const res = await importPersonaPack(await writePersonaPack(parsed.payload), 'Mime');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    const byTitle = new Map(rows.map((r) => [r.title, r]));
+    expect(byTitle.get('Here')?.mime).toBe('audio/mpeg');
+    expect(byTitle.get('Here')?.blob?.type).toBe('audio/mpeg');
+    expect(byTitle.get('In the vault')?.blob).toBeUndefined();
+    expect(byTitle.get('In the vault')?.mime).toBe('application/octet-stream');
   });
 });

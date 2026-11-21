@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import {
+  type ArtefactRow,
   _resetClientDataDbForTests,
   getClientDataDb,
   openClientDataDb,
@@ -215,4 +216,87 @@ test('an unknown ?open id opens nothing', async () => {
   );
   await waitFor(() => screen.getByText('Pomodoro'));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('a deep-linked id that is not among the visible rows is dropped, so a tab switch never opens it', async () => {
+  await seedPersona('p1', 'Mei');
+  await seedPersona('p2', 'Spicy', true);
+  await getClientDataDb().settings.update(1, { adultMode: 'sfw' });
+  await seedTaggedArtefact('a1', 'p1', 'Visible', 'safe');
+  await seedTaggedArtefact('hidden', 'p2', 'Hidden', 'secret');
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?open=hidden']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => screen.getByText('Visible'));
+  fireEvent.click(screen.getByRole('tab', { name: 'Docs' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'All' }));
+  // Flip SFW off: the hidden row becomes visible, and still must not pop open.
+  await getClientDataDb().settings.update(1, { adultMode: 'nsfw' });
+  await qc.invalidateQueries();
+  await waitFor(() => screen.getByText('Hidden'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+async function seedMedia(over: Partial<ArtefactRow>): Promise<void> {
+  await getClientDataDb().artefacts.add({
+    id: 'au1',
+    chatId: 'c1',
+    personaId: 'p1',
+    projectId: null,
+    origin: 'generated',
+    kind: 'audio',
+    format: 'audio',
+    title: 'Theme song',
+    fileName: 'theme-song.mp3',
+    mime: 'audio/mpeg',
+    content: '',
+    tags: [],
+    favourite: false,
+    createdAt: 1,
+    updatedAt: 1,
+    mediaMeta: { key: 'gen:au1', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 't' },
+    ...over,
+  });
+}
+
+function renderOpen(): void {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?type=media&open=au1']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+test('the lightbox has one Download for media, and says in words why it is unavailable', async () => {
+  await seedPersona('p1', 'Mei');
+  // An empty Blob is no file; the oversize sentinel means no fetch will ever bring it.
+  await seedMedia({ blob: new Blob([], { type: 'audio/mpeg' }), blobOversized: true });
+  renderOpen();
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  const download = screen.getByRole('button', { name: 'Download' });
+  expect(download).toBeDisabled();
+  expect(
+    within(document.querySelector('.lightbox-actions') ?? document.body).getByText(
+      'This file lives only on the device that saved it.',
+    ),
+  ).toBeInTheDocument();
+  // The player's own "⋯" menu would be a second Download.
+  expect(screen.queryByRole('button', { name: 'More for Theme song' })).not.toBeInTheDocument();
+});
+
+test('while the bytes are on their way the lightbox says so', async () => {
+  await seedPersona('p1', 'Mei');
+  await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+  renderOpen();
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+  expect(screen.getAllByText('Downloading from your vault…').length).toBeGreaterThan(0);
 });

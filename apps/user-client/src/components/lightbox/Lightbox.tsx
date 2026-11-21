@@ -166,6 +166,18 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     item.kind === 'text' ? (override ?? detectFormat(item.fileName, item.mime)) : 'plain';
 
   const editable = item.kind === 'text' && item.caps.editSource;
+  // An empty Blob counts as missing, as in the player.
+  const mediaBytes =
+    item.kind === 'media' && item.artefact?.blob && item.artefact.blob.size > 0
+      ? item.artefact.blob
+      : null;
+  // Without a vault ref, or past the oversize sentinel, no fetch will ever bring the bytes.
+  const mediaUnavailable =
+    item.kind !== 'media' || mediaBytes
+      ? null
+      : item.artefact?.blobOversized === true || !item.artefact?.blobRef
+        ? mediaCopy.deviceOnly
+        : mediaCopy.downloading;
   const dirty = editable && draft !== baseline;
 
   // Run an action immediately, or — if there are unsaved edits — defer it behind
@@ -382,11 +394,11 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               <button
                 type="button"
                 className="lightbox-btn"
-                // A media file still on its way from the vault cannot be saved yet; the
-                // player beside it says why.
-                disabled={item.kind === 'media' && !item.artefact?.blob}
-                title={
-                  item.kind === 'media' && !item.artefact?.blob ? mediaCopy.downloading : undefined
+                // A media file whose bytes are not here cannot be saved yet; the reason
+                // is shown as text beside the button (a title never shows on touch).
+                disabled={mediaUnavailable !== null}
+                aria-describedby={
+                  mediaUnavailable !== null ? 'lightbox-download-reason' : undefined
                 }
                 onClick={() => {
                   // Image and media items carry their bytes outside the text
@@ -394,13 +406,18 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
                   if (item.kind === 'image' && item.imageUrl)
                     downloadUrl(item.imageUrl, item.fileName);
                   else if (item.kind === 'media') {
-                    if (item.artefact?.blob) triggerDownload(item.artefact.blob, item.fileName);
+                    if (mediaBytes) triggerDownload(mediaBytes, item.fileName);
                   } else downloadText(draft, formatToExtension(item.fileName, format));
                 }}
               >
                 Download
               </button>
             )}
+            {item.caps.download && mediaUnavailable !== null ? (
+              <span id="lightbox-download-reason" className="lightbox-btn-reason">
+                {mediaUnavailable}
+              </span>
+            ) : null}
             {item.caps.delete && p.onDelete ? (
               <button
                 type="button"
@@ -450,7 +467,11 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
         <div className="lightbox-body">
           {item.kind === 'media' && item.artefact ? (
             <div className="lightbox-media">
-              <MediaPlayer artefact={item.artefact} title={item.title ?? item.fileName} />
+              <MediaPlayer
+                artefact={item.artefact}
+                title={item.title ?? item.fileName}
+                menu={false}
+              />
             </div>
           ) : item.kind === 'image' ? (
             item.blobSource && !item.imageUrl ? (

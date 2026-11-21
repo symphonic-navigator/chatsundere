@@ -126,7 +126,7 @@ export function VideoTile({
             <SeekBar title={title} controls={controls} />
           </div>
         )}
-        <div className="media-video-menu">{menu}</div>
+        {menu ? <div className="media-video-menu">{menu}</div> : null}
       </div>
       <div className="media-video-caption">
         <span className="media-title">{title}</span>

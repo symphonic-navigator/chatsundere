@@ -35,6 +35,11 @@ const ALLOWED_MIMES = new Set([
   'video/quicktime',
 ]);
 
+/** True for a mime on the audio/video allow-list; nothing else is ever stored as media. */
+export function isAllowedMediaMime(mime: string): boolean {
+  return ALLOWED_MIMES.has(mime);
+}
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   mp3: 'audio/mpeg',
   wav: 'audio/wav',

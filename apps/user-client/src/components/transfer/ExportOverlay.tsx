@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useState } from 'react';
-import { exportPersona } from '../../data/chatsundere-export.js';
+import { exportPersonaWithReport, missingFilesNotice } from '../../data/chatsundere-export.js';
 import {
   type EncryptFormState,
   INITIAL_ENCRYPT_FORM,
@@ -52,12 +52,21 @@ export function ExportOverlay({
     if (!resolved.ok) return;
     setExporting(true);
     try {
-      const blob = resolved.password
-        ? await exportPersona(personaId, { memory, artefacts, images }, resolved.password)
-        : await exportPersona(personaId, { memory, artefacts, images });
+      const { blob, missingFiles } = resolved.password
+        ? await exportPersonaWithReport(personaId, { memory, artefacts, images }, resolved.password)
+        : await exportPersonaWithReport(personaId, { memory, artefacts, images });
       const suffix = resolved.password ? '-chatsundere-encrypted.tar.gz' : '-chatsundere.tar.gz';
       triggerDownload(blob, `${slug(personaName)}${suffix}`);
-      toastStore.show({ message: 'Persona exported', tone: 'success', durationMs: 3000 });
+      // Files left behind are said out loud, and stay up long enough to read.
+      toastStore.show(
+        missingFiles > 0
+          ? {
+              message: `Persona exported. ${missingFilesNotice(missingFiles)}`,
+              tone: 'warn',
+              durationMs: 8000,
+            }
+          : { message: 'Persona exported', tone: 'success', durationMs: 3000 },
+      );
       onClose();
     } catch (e) {
       toastStore.show({
