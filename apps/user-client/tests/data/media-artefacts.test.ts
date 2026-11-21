@@ -8,7 +8,11 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
-import { addMediaArtefact, findMediaArtefactByKey } from '../../src/data/media-artefacts.js';
+import {
+  addMediaArtefact,
+  findMediaArtefactByKey,
+  patchMediaPillItem,
+} from '../../src/data/media-artefacts.js';
 import { setImmediateDrain } from '../../src/sync/enqueue.js';
 import { _resetTriggersForTests, _setTriggerCycle } from '../../src/sync/triggers.js';
 
@@ -131,5 +135,74 @@ describe('findMediaArtefactByKey', () => {
     await addMediaArtefact(audioInput('c1'));
     expect(await findMediaArtefactByKey('c2', 'gen:abc')).toBeUndefined();
     expect(await findMediaArtefactByKey('c1', 'gen:other')).toBeUndefined();
+  });
+});
+
+describe('patchMediaPillItem', () => {
+  const pillRow = () => ({
+    id: 'pill1',
+    messageId: 'm1',
+    kind: 'tool-call' as const,
+    positionHint: 'inline' as const,
+    status: 'completed' as const,
+    createdAt: 1,
+    payload: {
+      name: 'el_generate',
+      media: [
+        {
+          key: 'gen:G1',
+          kind: 'audio',
+          mime: 'audio/mpeg',
+          title: 'Audio 1',
+          status: 'failed',
+          cause: 'unreachable',
+          source: { url: 'https://cdn.example/a.mp3', expiresAt: null },
+        },
+        { key: 'gen:G2', kind: 'audio', mime: 'audio/mpeg', title: 'Audio 2', status: 'saved' },
+      ],
+    },
+  });
+
+  it('a saved patch drops the source and enqueues a pills upsert', async () => {
+    setOnline();
+    await getClientDataDb().pills.add(pillRow());
+    expect(await patchMediaPillItem('pill1', 'gen:G1', { status: 'saved', artefactId: 'a1' })).toBe(
+      true,
+    );
+    const media = ((await getClientDataDb().pills.get('pill1'))?.payload as { media: unknown[] })
+      .media;
+    expect(media[0]).toEqual({
+      key: 'gen:G1',
+      kind: 'audio',
+      mime: 'audio/mpeg',
+      title: 'Audio 1',
+      status: 'saved',
+      artefactId: 'a1',
+    });
+    expect(media[1]).toMatchObject({ key: 'gen:G2', status: 'saved' });
+    const outbox = await getClientDataDb().syncOutbox.toArray();
+    expect(outbox).toEqual([
+      expect.objectContaining({ collection: 'pills', key: 'pill1', op: 'upsert' }),
+    ]);
+  });
+
+  it('a failed patch keeps the source', async () => {
+    await getClientDataDb().pills.add(pillRow());
+    await patchMediaPillItem('pill1', 'gen:G1', { status: 'failed', cause: 'expired' });
+    const media = (
+      (await getClientDataDb().pills.get('pill1'))?.payload as {
+        media: Array<Record<string, unknown>>;
+      }
+    ).media;
+    expect(media[0]).toMatchObject({
+      cause: 'expired',
+      source: { url: 'https://cdn.example/a.mp3' },
+    });
+  });
+
+  it('returns false for a missing pill or key', async () => {
+    expect(await patchMediaPillItem('gone', 'gen:G1', { status: 'saved' })).toBe(false);
+    await getClientDataDb().pills.add(pillRow());
+    expect(await patchMediaPillItem('pill1', 'gen:X', { status: 'saved' })).toBe(false);
   });
 });

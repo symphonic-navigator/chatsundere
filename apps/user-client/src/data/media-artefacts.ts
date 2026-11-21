@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { type ArtefactRow, getClientDataDb } from '../boot/client-data-db.js';
 import type { MediaProbe } from '../lib/media/media-probe.js';
 import type { MediaKind } from '../mcp/media-extract.js';
+import type { MediaItem } from '../mcp/media-items.js';
 import { mintBlobRefFor } from '../sync/blob-transform.js';
 import { enqueueBlobPut, enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
@@ -79,4 +80,36 @@ export async function addMediaArtefact(input: AddMediaArtefactInput): Promise<st
   });
   if (linked) scheduleClass1Sync();
   return id;
+}
+
+/**
+ * Merge a patch into one media item of a pill's `payload.media` and sync the pill. Once the
+ * file is saved its signed source URL is of no further use, so it leaves the payload.
+ */
+export async function patchMediaPillItem(
+  pillId: string,
+  key: string,
+  patch: Partial<MediaItem>,
+): Promise<boolean> {
+  const db = getClientDataDb();
+  const linked = isLinkedForSync();
+  const written = await db.transaction('rw', [db.pills, db.syncOutbox], async (tx) => {
+    const pill = await db.pills.get(pillId);
+    const payload = pill?.payload as Record<string, unknown> | undefined;
+    const media = payload?.media;
+    if (!pill || !payload || !Array.isArray(media)) return false;
+    const items = media as MediaItem[];
+    const at = items.findIndex((item) => item.key === key);
+    const current = items[at];
+    if (!current) return false;
+    const merged: MediaItem = { ...current, ...patch };
+    const { source: _source, cause: _cause, ...settled } = merged;
+    const next = patch.status === 'saved' || patch.status === 'duplicate' ? settled : merged;
+    const updated = items.map((item, i) => (i === at ? next : item));
+    await db.pills.put({ ...pill, payload: { ...payload, media: updated } });
+    if (linked) enqueueSync(tx, 'pills', pillId, 'upsert');
+    return true;
+  });
+  if (written && linked) scheduleClass1Sync();
+  return written;
 }

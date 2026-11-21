@@ -34,6 +34,7 @@ import { buildLoreContext } from '../knowledge/lore-context.js';
 import { KNOWLEDGE_LORE_OPTS } from '../knowledge/lore.js';
 import { isContextMessage } from '../lib/content-blocks.js';
 import { thumbnailFromBlob } from '../lib/image-thumbnail.js';
+import { saveMedia } from '../lib/media/media-save.js';
 import { isProxyAvailable } from '../lib/proxy-auth.js';
 import { type ReasoningState, maxReasoningIntent } from '../lib/reasoning-resolver.js';
 import { resolveArtefactExpert } from '../lib/resolve-artefact-expert.js';
@@ -226,7 +227,7 @@ async function resolvePersonaContextForChat(
   const images = await resolveImageGeneration(settings, persona, chatId, mk);
 
   const mcpServers = await db.mcpServers.toArray();
-  const mcp = buildMcpContext({
+  const mcpBase = buildMcpContext({
     servers: mcpServers,
     overrides: persona.mcpOverrides ?? {},
     hasProxy,
@@ -236,6 +237,9 @@ async function resolvePersonaContextForChat(
     // Lives with the send: one auth notice per server per turn (spec §9, "In a chat").
     authNotices: new Map(),
   });
+  const mcp = mcpBase
+    ? { ...mcpBase, media: { chatId, personaId: persona.id, save: saveMedia } }
+    : null;
 
   return {
     chat,
