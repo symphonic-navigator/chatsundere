@@ -16,7 +16,7 @@ import type {
   ExportedPersona,
   PersonaPackPayload,
 } from '../lib/chatsundere-transfer/persona-pack.js';
-import { writePersonaPack } from '../lib/chatsundere-transfer/persona-pack.js';
+import { thumbBlobKey, writePersonaPack } from '../lib/chatsundere-transfer/persona-pack.js';
 import { APP_VERSION } from '../lib/version.js';
 
 /** Encrypt a plaintext pack Blob under `password` when one is given; otherwise return it unchanged. */
@@ -41,7 +41,8 @@ export interface PersonaExportOptions {
   memory: boolean;
   /** Include text-kind artefacts. */
   artefacts: boolean;
-  /** Include image attachments and image artefacts; replace dropped attachments with a placeholder. */
+  /** Include image attachments and image, audio and video artefacts; replace
+   *  dropped image attachments with a placeholder. */
   images: boolean;
 }
 
@@ -57,7 +58,7 @@ export interface PersonaExportOptions {
  * Switch semantics:
  * - `memory: false` → `payload.memory = null`.
  * - `artefacts: false` → text-kind artefacts are dropped.
- * - `images: false` → image-kind artefacts are dropped; each image attachment is
+ * - `images: false` → image, audio and video artefacts are dropped; each image attachment is
  *   replaced by a text attachment carrying `IMAGE_PLACEHOLDER_TEXT` (same `id` and
  *   position, so message context is preserved). Blob bytes are never written.
  */
@@ -158,12 +159,20 @@ export async function exportPersona(
 
   const artefacts: ArtefactRow[] = [];
   for (const art of rawArtefacts) {
+    const media = art.kind === 'audio' || art.kind === 'video';
     if (!opts.artefacts && art.kind === 'text') continue;
-    if (!opts.images && art.kind === 'image') continue;
-    if (opts.images && art.kind === 'image' && art.blob) {
+    if (!opts.images && (art.kind === 'image' || media)) continue;
+    if (opts.images && (art.kind === 'image' || media) && art.blob) {
       blobs.set(art.id, {
         bytes: new Uint8Array(await art.blob.arrayBuffer()),
         mime: art.mime,
+      });
+    }
+    // A video's poster is not regenerated on import, so it travels too.
+    if (opts.images && media && art.thumbBlob) {
+      blobs.set(thumbBlobKey(art.id), {
+        bytes: new Uint8Array(await art.thumbBlob.arrayBuffer()),
+        mime: art.thumbBlob.type || 'image/jpeg',
       });
     }
     // Blob fields serialise to {} in JSON — carry bytes via the blobs map only (I2 fix).

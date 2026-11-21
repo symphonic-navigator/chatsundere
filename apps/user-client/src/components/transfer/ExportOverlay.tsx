@@ -97,8 +97,8 @@ export function ExportOverlay({
           />
           <ToggleRow
             id="export-images"
-            label="Images"
-            subtitle="Off: in-chat images become placeholders in the copy."
+            label="Images, audio & video"
+            subtitle="Off: in-chat images become placeholders in the copy; audio and video stay behind."
             checked={images}
             onChange={setImages}
           />

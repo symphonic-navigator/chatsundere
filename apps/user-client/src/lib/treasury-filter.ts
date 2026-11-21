@@ -2,7 +2,7 @@
 import type { ArtefactRow } from '../boot/client-data-db.js';
 
 /** The Treasury "type" axis — derived from `format`, never stored. */
-export type TreasuryType = 'all' | 'app' | 'doc' | 'code' | 'image';
+export type TreasuryType = 'all' | 'app' | 'doc' | 'code' | 'image' | 'media';
 
 /** Derive the Treasury type bucket from an artefact's storage format. */
 export function formatToType(format: ArtefactRow['format']): Exclude<TreasuryType, 'all'> {
@@ -13,6 +13,9 @@ export function formatToType(format: ArtefactRow['format']): Exclude<TreasuryTyp
       return 'doc';
     case 'code':
       return 'code';
+    case 'audio':
+    case 'video':
+      return 'media';
     default:
       // svg | mermaid | image — all render as visuals.
       return 'image';
@@ -56,10 +59,11 @@ export function normaliseTags(tags: string[]): string[] {
 }
 
 /**
- * Byte size of an artefact: UTF-8 byte length of text content.
- * Note: ArtefactRow is text-only today; `blob` lives on AttachmentRow, not here.
+ * Byte size of an artefact: the file's bytes for audio and video, whose text
+ * content is empty, otherwise the UTF-8 byte length of the text content.
  */
 export function artefactSize(row: ArtefactRow): number {
+  if ((row.kind === 'audio' || row.kind === 'video') && row.blob) return row.blob.size;
   return new TextEncoder().encode(row.content ?? '').length;
 }
 

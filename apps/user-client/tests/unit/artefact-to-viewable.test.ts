@@ -132,3 +132,50 @@ test('artefactToViewable carries tags and enables editTags; attachments do not',
   expect(v.tags).toEqual(['demo']);
   expect(v.caps.editTags).toBe(true);
 });
+
+const audioRow: ArtefactRow = {
+  id: 'au1',
+  chatId: 'c1',
+  personaId: 'p1',
+  projectId: null,
+  origin: 'generated',
+  kind: 'audio',
+  format: 'audio',
+  title: 'Theme song',
+  fileName: 'theme-song.mp3',
+  mime: 'audio/mpeg',
+  content: '',
+  tags: ['music'],
+  favourite: false,
+  createdAt: 0,
+  updatedAt: 0,
+  blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/mpeg' }),
+  mediaMeta: { key: 'gen:au1', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 't' },
+};
+
+test('maps an audio artefact to a media viewable that carries the row and creates no URL', () => {
+  const createUrl = vi.spyOn(URL, 'createObjectURL');
+  const v = artefactToViewable(audioRow);
+  expect(v.kind).toBe('media');
+  expect(v.artefact).toBe(audioRow);
+  expect(v.text).toBeUndefined();
+  expect(v.imageUrl).toBeUndefined();
+  expect(v.provenance).toBe('via ElevenLabs · t');
+  expect(v.caps).toEqual({
+    rename: true,
+    remove: false,
+    copy: false,
+    download: true,
+    delete: true,
+    editSource: false,
+    editTags: true,
+  });
+  // The player owns its own object URL; mapping a row must not leak one.
+  expect(createUrl).not.toHaveBeenCalled();
+  createUrl.mockRestore();
+});
+
+test('maps a video artefact to a media viewable too', () => {
+  const v = artefactToViewable({ ...audioRow, kind: 'video', format: 'video', mime: 'video/mp4' });
+  expect(v.kind).toBe('media');
+});

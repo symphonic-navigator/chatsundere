@@ -23,6 +23,13 @@ import { useFilteredPersonas } from '../../data/personas.js';
 import { treasuryCountLabel } from '../../lib/treasury-count.js';
 import { type TreasuryType, applyTreasuryFilters, collectTags } from '../../lib/treasury-filter.js';
 
+const TYPES: readonly TreasuryType[] = ['all', 'app', 'doc', 'code', 'image', 'media'];
+
+/** Read the `type` deep-link parameter, ignoring values that are not a tab. */
+function typeFromParam(raw: string | null): TreasuryType {
+  return TYPES.find((t) => t === raw) ?? 'all';
+}
+
 export function Treasury(): JSX.Element {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
@@ -30,7 +37,7 @@ export function Treasury(): JSX.Element {
   const personas = useFilteredPersonas();
   const { onHelp, helpOverlay } = useHelp('treasury');
 
-  const [type, setType] = useState<TreasuryType>((search.get('type') as TreasuryType) ?? 'all');
+  const [type, setType] = useState<TreasuryType>(typeFromParam(search.get('type')));
   const [personaId, setPersonaId] = useState<string | null>(search.get('personaId'));
   const [tags, setTags] = useState<string[]>([]);
   const [favourite, setFavourite] = useState(false);
@@ -42,7 +49,8 @@ export function Treasury(): JSX.Element {
   const [tagging, setTagging] = useState(false);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // `?open=<id>` deep-links straight into the lightbox (the chat's "Open in Treasury").
+  const [openId, setOpenId] = useState<string | null>(search.get('open'));
 
   const setFav = useSetArtefactFavouriteGlobal();
   const setArtefactTags = useSetArtefactTags();
@@ -78,6 +86,7 @@ export function Treasury(): JSX.Element {
     type?: TreasuryType;
     personaId?: string | null;
     query?: string;
+    open?: null;
   }): void {
     setSearch(
       (prev) => {
@@ -94,6 +103,7 @@ export function Treasury(): JSX.Element {
           if (next.query.trim() !== '') params.set('query', next.query.trim());
           else params.delete('query');
         }
+        if (next.open === null) params.delete('open');
         return params;
       },
       { replace: true },
@@ -112,6 +122,12 @@ export function Treasury(): JSX.Element {
       mirrorUrl({ personaId: null });
     }
   }, [personaId, personas.data]);
+
+  // Closing drops a deep-linked `open`, so Back or a reload does not reopen the file.
+  function closeLightbox(): void {
+    setOpenId(null);
+    if (search.has('open')) mirrorUrl({ open: null });
+  }
 
   function toggleSelect(id: string): void {
     setSelected((prev) => {
@@ -410,9 +426,9 @@ export function Treasury(): JSX.Element {
             onEditText={(id, text) => editGlobal.mutate({ id, content: text })}
             onDelete={(id) => {
               removeMany.mutate([id]);
-              setOpenId(null);
+              closeLightbox();
             }}
-            onClose={() => setOpenId(null)}
+            onClose={closeLightbox}
           />
         ) : null}
       </div>

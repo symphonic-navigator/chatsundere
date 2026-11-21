@@ -158,3 +158,61 @@ test('hidden (adult-in-SFW) persona artefacts and tags do not leak into Treasury
   await waitFor(() => screen.getByRole('button', { name: 'Add tag safe' }));
   expect(screen.queryByRole('button', { name: 'Add tag secret' })).not.toBeInTheDocument();
 });
+
+test('?type=media&open=<id> opens that file in the lightbox with its player', async () => {
+  await seedPersona('p1', 'Mei');
+  await addGeneratedArtefact({ chatId: 'c1', personaId: 'p1', title: 'Pomodoro', content: '<x>' });
+  await getClientDataDb().artefacts.add({
+    id: 'au1',
+    chatId: 'c1',
+    personaId: 'p1',
+    projectId: null,
+    origin: 'generated',
+    kind: 'audio',
+    format: 'audio',
+    title: 'Theme song',
+    fileName: 'theme-song.mp3',
+    mime: 'audio/mpeg',
+    content: '',
+    tags: [],
+    favourite: false,
+    createdAt: 1,
+    updatedAt: 1,
+    mediaMeta: { key: 'gen:au1', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 't' },
+  });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?type=media&open=au1']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.getByRole('tab', { name: 'Audio & video' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.queryByText('Pomodoro')).not.toBeInTheDocument();
+  const player = document.querySelector('.lightbox-body [data-media-artefact="au1"]');
+  expect(player).not.toBeNull();
+  expect(screen.getByText('via ElevenLabs · t')).toBeInTheDocument();
+  // Text-only actions stay away from a media file.
+  expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+});
+
+test('an unknown ?open id opens nothing', async () => {
+  await seedPersona('p1', 'Mei');
+  await addGeneratedArtefact({ chatId: 'c1', personaId: 'p1', title: 'Pomodoro', content: '<x>' });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?open=nope']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => screen.getByText('Pomodoro'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

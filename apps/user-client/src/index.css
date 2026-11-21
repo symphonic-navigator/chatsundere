@@ -3019,6 +3019,22 @@ h1 {
   min-height: 0;
 }
 
+/* An audio or video artefact in the lightbox: the shared player, centred and
+ * as wide as a phone allows, never wider than a comfortable reading column. */
+.lightbox-media {
+  width: min(100%, 40rem);
+  max-height: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.lightbox-media > .media-player[data-kind="audio"] {
+  padding: 0.6rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-aurora-500) 22%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 4%, var(--color-ink));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-aurora-500) 8%, transparent);
+}
+
 .lightbox-img {
   max-width: 100%;
   max-height: 100%;
@@ -4365,6 +4381,12 @@ h1 {
   background: rgba(229, 143, 200, 0.12);
 }
 
+/* amber for audio and video */
+.artefact-glyph.g-media {
+  color: #f2b07a;
+  background: rgba(242, 176, 122, 0.12);
+}
+
 /* Empty-state note */
 .artefact-empty {
   font-size: 0.8rem;
@@ -4454,6 +4476,10 @@ h1 {
 .treasury-glyph.g-code {
   color: #e0a85f;
   background: rgba(224, 168, 95, 0.12);
+}
+.treasury-glyph.g-media {
+  color: #f2b07a;
+  background: rgba(242, 176, 122, 0.12);
 }
 .treasury-check {
   flex: 0 0 auto;
@@ -4697,11 +4723,33 @@ h1 {
 .artefact-picker-row-body:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+.artefact-picker-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
 .artefact-picker-row-title {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.artefact-picker-row-reason {
+  font-size: 0.7rem;
+  color: var(--color-paper-soft);
+}
+.artefact-picker-row[data-disabled] .artefact-picker-row-body {
+  cursor: not-allowed;
+}
+.artefact-picker-row[data-disabled] .artefact-picker-row-body:hover {
+  background: transparent;
+}
+.artefact-picker-row[data-disabled] .artefact-glyph,
+.artefact-picker-row[data-disabled] .artefact-picker-row-title,
+.artefact-picker-row[data-disabled] .artefact-picker-row-chip {
+  opacity: 0.45;
 }
 .artefact-picker-row-chip {
   font-size: 0.65rem;
@@ -5746,6 +5794,14 @@ h1 {
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-paper);
   font-weight: 600;
+}
+/* The Treasury type tabs: six labels of very different lengths ("All" next to
+ * "Audio & video") share 380 px, so each takes its own width instead of an
+ * equal share that would wrap the longest one onto two lines. */
+.cs-segmented-fit .cs-seg {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  padding-inline: 6px;
 }
 
 /* ── ListScaffold primitive (fixed header/footer; only list scrolls) ──── */

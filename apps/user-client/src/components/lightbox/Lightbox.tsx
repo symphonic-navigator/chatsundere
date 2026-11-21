@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { triggerDownload } from '../../lib/download.js';
 import { prefersReducedMotion } from '../../lib/reduced-motion.js';
 import { TagEditor } from '../artefact/TagEditor.js';
 import { BlobImage } from '../blob/BlobImage.js';
 import { CopyButton } from '../chat/markdown/CopyButton.js';
+import { MediaPlayer } from '../chat/media/MediaCard.js';
+import { mediaCopy } from '../chat/media/media-copy.js';
 import { FormatPicker } from './FormatPicker';
 import { LightboxTextBody } from './LightboxTextBody';
 import { type PreviewFormat, detectFormat, formatToExtension } from './format-detect';
@@ -96,7 +99,10 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   useEffect(() => {
     if (p.items.length === 0) return;
     const onKey = (e: KeyboardEvent): void => {
+      // Arrow keys inside a player seek; they must not also flip to the neighbour.
+      const inPlayer = e.target instanceof Element && e.target.closest('.media-player') !== null;
       if (e.key === 'Escape') closeRef.current();
+      else if (inPlayer) return;
       else if (e.key === 'ArrowRight') navRef.current.next();
       else if (e.key === 'ArrowLeft') navRef.current.prev();
     };
@@ -376,12 +382,20 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               <button
                 type="button"
                 className="lightbox-btn"
+                // A media file still on its way from the vault cannot be saved yet; the
+                // player beside it says why.
+                disabled={item.kind === 'media' && !item.artefact?.blob}
+                title={
+                  item.kind === 'media' && !item.artefact?.blob ? mediaCopy.downloading : undefined
+                }
                 onClick={() => {
-                  // Image items carry their bytes behind imageUrl; the text
-                  // draft would download an empty file for them.
+                  // Image and media items carry their bytes outside the text
+                  // draft, which would download an empty file for them.
                   if (item.kind === 'image' && item.imageUrl)
                     downloadUrl(item.imageUrl, item.fileName);
-                  else downloadText(draft, formatToExtension(item.fileName, format));
+                  else if (item.kind === 'media') {
+                    if (item.artefact?.blob) triggerDownload(item.artefact.blob, item.fileName);
+                  } else downloadText(draft, formatToExtension(item.fileName, format));
                 }}
               >
                 Download
@@ -434,7 +448,11 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
           ) : null}
         </div>
         <div className="lightbox-body">
-          {item.kind === 'image' ? (
+          {item.kind === 'media' && item.artefact ? (
+            <div className="lightbox-media">
+              <MediaPlayer artefact={item.artefact} title={item.title ?? item.fileName} />
+            </div>
+          ) : item.kind === 'image' ? (
             item.blobSource && !item.imageUrl ? (
               // Lazy-on-view (§6): the fetch is dismissable at any time — closing
               // detaches (useBlobBytes) and the background fetch completes onto the

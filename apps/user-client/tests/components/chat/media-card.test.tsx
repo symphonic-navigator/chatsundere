@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import {
@@ -428,5 +428,36 @@ describe('Pill with media', () => {
     expect(block?.previousElementSibling?.classList.contains('pill-wrap')).toBe(true);
     expect(await screen.findByText('ElevenLabs · creative_generate_in_flow')).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Play Audio 1' })).toBeTruthy();
+  });
+  it('opens the file itself in the Treasury', async () => {
+    await seed('a1', 'audio');
+    function Where(): JSX.Element {
+      const loc = useLocation();
+      return <span data-testid="where">{`${loc.pathname}${loc.search}`}</span>;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/app/chat/c1']}>
+          <Routes>
+            <Route
+              path="/app/chat/c1"
+              element={
+                <MediaCard
+                  pill={pillWith([saved(1, 'a1')])}
+                  chatId="c1"
+                  personaId="pe1"
+                  serverLabel="ElevenLabs"
+                  toolName="creative_generate_in_flow"
+                />
+              }
+            />
+            <Route path="/app/treasury" element={<Where />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'More for Audio 1' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open in Treasury' }));
+    expect(screen.getByTestId('where').textContent).toBe('/app/treasury?type=media&open=a1');
   });
 });

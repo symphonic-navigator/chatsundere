@@ -23,7 +23,7 @@ import {
   type ExportedVector,
   readKnowledgePack,
 } from '../lib/chatsundere-transfer/knowledge-pack.js';
-import { readPersonaPack } from '../lib/chatsundere-transfer/persona-pack.js';
+import { readPersonaPack, thumbBlobKey } from '../lib/chatsundere-transfer/persona-pack.js';
 import { resolveVectorStrategy } from '../lib/chatsundere-transfer/vector-strategy.js';
 import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
@@ -256,6 +256,8 @@ export async function importPersonaPack(
   // ── Remap and write artefacts ─────────────────────────────────────────────
   const artefactRows = payload.artefacts.map((art) => {
     const blobEntry = payload.blobs.get(art.id);
+    const media = art.kind === 'audio' || art.kind === 'video';
+    const thumbEntry = media ? payload.blobs.get(thumbBlobKey(art.id)) : undefined;
     return {
       ...art,
       id: remap.fresh(art.id),
@@ -263,11 +265,18 @@ export async function importPersonaPack(
       personaId,
       // Blob fields serialise to {} in JSON — guard against poison from pre-fix packs (I2).
       blob: blobEntry
-        ? new Blob([new Uint8Array(blobEntry.bytes)], { type: blobEntry.mime })
+        ? new Blob([new Uint8Array(blobEntry.bytes)], {
+            // The extension cannot tell audio/webm from video/webm; the row can.
+            type: media ? art.mime : blobEntry.mime,
+          })
         : art.blob instanceof Blob
           ? art.blob
           : undefined,
-      thumbBlob: art.thumbBlob instanceof Blob ? art.thumbBlob : undefined,
+      thumbBlob: thumbEntry
+        ? new Blob([new Uint8Array(thumbEntry.bytes)], { type: thumbEntry.mime })
+        : art.thumbBlob instanceof Blob
+          ? art.thumbBlob
+          : undefined,
     };
   });
   if (artefactRows.length > 0) await db.artefacts.bulkAdd(artefactRows);
@@ -417,9 +426,10 @@ export async function importKnowledgePack(
 
 /**
  * Rewrite artefact id references inside a pill payload so they resolve to the
- * freshly-imported artefact ids. Handles the two known shapes:
+ * freshly-imported artefact ids. Handles the three known shapes:
  * - `{ artefactId: string }` — create_artefact tool-calls (ArtefactPill)
  * - `{ artefactIds: string[] }` — generate_image tool-calls (ImagePill)
+ * - `{ media: { artefactId?: string }[] }` — MCP audio and video (MediaCard)
  * All other payload shapes are returned unchanged.
  */
 function remapPillArtefactRefs(raw: unknown, remap: IdRemap): unknown {
@@ -433,6 +443,14 @@ function remapPillArtefactRefs(raw: unknown, remap: IdRemap): unknown {
   const artefactIds = p.artefactIds;
   if (Array.isArray(artefactIds)) {
     next.artefactIds = artefactIds.map((x) => (typeof x === 'string' ? (remap.map(x) ?? x) : x));
+  }
+  const media = p.media;
+  if (Array.isArray(media)) {
+    next.media = media.map((item: unknown) => {
+      if (item === null || typeof item !== 'object') return item;
+      const id = (item as { artefactId?: unknown }).artefactId;
+      return typeof id === 'string' ? { ...item, artefactId: remap.map(id) ?? id } : item;
+    });
   }
   return next;
 }

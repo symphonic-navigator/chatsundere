@@ -102,3 +102,14 @@ test('normalisePhrases normalises, drops empties, dedupes order-preserving', () 
     'drachenblut',
   ]);
 });
+
+test('formatToType puts audio and video in the media bucket and keeps svg an image', () => {
+  expect(formatToType('audio')).toBe('media');
+  expect(formatToType('video')).toBe('media');
+  expect(formatToType('svg')).toBe('image');
+});
+
+test('artefactSize counts the bytes of a media file, not its empty text', () => {
+  const blob = new Blob([new Uint8Array(2048)], { type: 'audio/mpeg' });
+  expect(artefactSize(row({ kind: 'audio', format: 'audio', content: '', blob }))).toBe(2048);
+});

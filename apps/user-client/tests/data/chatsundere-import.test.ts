@@ -363,3 +363,166 @@ describe('persona import — nested pillId / artefact-ref remapping (C1+I1 regre
     expect(artefact).toBeDefined();
   });
 });
+
+describe('persona export → import round-trip — audio and video artefacts', () => {
+  const audioBytes = new Uint8Array([0x49, 0x44, 0x33, 4, 5, 6]);
+  const videoBytes = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
+  const posterBytes = new Uint8Array([0xff, 0xd8, 0xff, 9]);
+
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+    const db = getClientDataDb();
+    await db.personas.add({
+      id: 'p-media',
+      name: 'Media',
+      providerId: '',
+      modelId: '',
+      mcpOverrides: {},
+      libraryIds: [],
+    } as never);
+    await db.chats.add({
+      id: 'c-media',
+      personaId: 'p-media',
+      title: 'media chat',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 2,
+      resolvedMindspaceId: '',
+      libraryIds: [],
+      draftInput: '',
+      bookmarkedMessageCount: 0,
+    } satisfies ChatRow);
+    await db.messages.add({
+      id: 'm-media',
+      chatId: 'c-media',
+      role: 'persona',
+      contentBlocks: [{ type: 'pill', pillId: 'pill-media' }],
+      createdAt: 1,
+      updatedAt: 1,
+      bookmarked: false,
+      streamingState: 'complete',
+    } satisfies MessageRow);
+    await db.pills.add({
+      id: 'pill-media',
+      messageId: 'm-media',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'elevenlabs_creative_generate_speech',
+        result: 'ok',
+        media: [
+          {
+            key: 'gen:a',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 1',
+            status: 'saved',
+            artefactId: 'au-orig',
+          },
+          {
+            key: 'gen:v',
+            kind: 'video',
+            mime: 'video/mp4',
+            title: 'Video 1',
+            status: 'saved',
+            artefactId: 'vi-orig',
+          },
+        ],
+      },
+      createdAt: 1,
+    } satisfies PillRow);
+    const base = {
+      chatId: 'c-media',
+      personaId: 'p-media',
+      projectId: null,
+      origin: 'generated' as const,
+      content: '',
+      tags: ['tune'],
+      favourite: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await db.artefacts.add({
+      ...base,
+      id: 'au-orig',
+      kind: 'audio',
+      format: 'audio',
+      title: 'Theme song',
+      fileName: 'theme-song.mp3',
+      mime: 'audio/mpeg',
+      blob: new Blob([audioBytes], { type: 'audio/mpeg' }),
+      mediaMeta: { key: 'gen:a', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 'tts' },
+    } satisfies ArtefactRow);
+    await db.artefacts.add({
+      ...base,
+      id: 'vi-orig',
+      kind: 'video',
+      format: 'video',
+      title: 'Clip',
+      fileName: 'clip.mp4',
+      mime: 'video/mp4',
+      blob: new Blob([videoBytes], { type: 'video/mp4' }),
+      thumbBlob: new Blob([posterBytes], { type: 'image/jpeg' }),
+      mediaMeta: { key: 'gen:v', durationMs: 5_000, serverName: 'ElevenLabs', toolName: 'video' },
+    } satisfies ArtefactRow);
+  });
+
+  afterEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  async function bytesOf(b: Blob | undefined): Promise<number[]> {
+    return b ? [...new Uint8Array(await b.arrayBuffer())] : [];
+  }
+
+  it('carries the bytes, the poster, the mime and the media provenance, and keeps the card pointing at them', async () => {
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: true });
+    const res = await importPersonaPack(blob, 'Media (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const chatId = chats[0]?.id ?? '';
+    const rows = await db.artefacts.where('chatId').equals(chatId).toArray();
+    const audio = rows.find((r) => r.kind === 'audio');
+    const video = rows.find((r) => r.kind === 'video');
+
+    expect(audio?.id).not.toBe('au-orig');
+    expect(audio?.format).toBe('audio');
+    expect(audio?.mime).toBe('audio/mpeg');
+    expect(audio?.blob?.type).toBe('audio/mpeg');
+    expect(await bytesOf(audio?.blob)).toEqual([...audioBytes]);
+    expect(audio?.mediaMeta).toEqual({
+      key: 'gen:a',
+      durationMs: 46_000,
+      serverName: 'ElevenLabs',
+      toolName: 'tts',
+    });
+    expect(audio?.tags).toEqual(['tune']);
+
+    expect(video?.blob?.type).toBe('video/mp4');
+    expect(await bytesOf(video?.blob)).toEqual([...videoBytes]);
+    expect(video?.thumbBlob?.type).toBe('image/jpeg');
+    expect(await bytesOf(video?.thumbBlob)).toEqual([...posterBytes]);
+
+    // The media card's saved items must resolve to the imported rows.
+    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    const block = msgs[0]?.contentBlocks.find((b) => b.type === 'pill');
+    const pillId = block && block.type === 'pill' ? block.pillId : '';
+    const pill = await db.pills.get(pillId);
+    const media = (pill?.payload as { media: { artefactId?: string }[] }).media;
+    expect(media.map((m) => m.artefactId)).toEqual([audio?.id, video?.id]);
+  });
+
+  it('leaves audio and video behind with the images when images are off', async () => {
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: false });
+    const res = await importPersonaPack(blob, 'Media (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    expect(rows).toHaveLength(0);
+  });
+});
