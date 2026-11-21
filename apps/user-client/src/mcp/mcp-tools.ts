@@ -1,5 +1,5 @@
-import type { MediaSaveOutcome } from '../lib/media/media-save.js';
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { MediaSaveOutcome } from '../lib/media/media-save.js';
 import type { Tool, ToolProgress, ToolResult } from '../tools/types.js';
 import { type McpCallResult, mcpToolsCall } from './mcp-client.js';
 import { type McpRawResult, extractMedia } from './media-extract.js';
@@ -230,7 +230,10 @@ async function withMedia(
     }),
     new Promise<void>((resolve) => {
       if (!signal) return;
-      if (signal.aborted) resolve();
+      if (signal.aborted) {
+        resolve();
+        return;
+      }
       onAbort = resolve;
       signal.addEventListener('abort', onAbort, { once: true });
     }),
