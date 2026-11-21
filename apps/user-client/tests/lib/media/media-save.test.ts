@@ -13,6 +13,7 @@ import {
   type MediaSaveContext,
   _setMediaProbeForTests,
   isExpired,
+  progressKey,
   saveMedia,
 } from '../../../src/lib/media/media-save.js';
 import type { MediaRef } from '../../../src/mcp/media-extract.js';
@@ -44,6 +45,12 @@ function urlRef(over: Partial<MediaRef> = {}): MediaRef {
 }
 
 const fetchMock = vi.fn<typeof fetch>();
+
+/** A fetched Response's final URL after redirects; constructed ones have none. */
+function withUrl(response: Response, url: string): Response {
+  Object.defineProperty(response, 'url', { value: url });
+  return response;
+}
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
@@ -79,14 +86,14 @@ describe('saveMedia', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('saves a direct fetch, with a GET that never follows redirects', async () => {
+  it('saves a direct fetch, with a GET that follows redirects', async () => {
     fetchMock.mockResolvedValueOnce(new Response(MP3, { status: 200 }));
     const ref = urlRef();
     const outcome = await saveMedia(ref, CTX);
     expect(outcome.status).toBe('saved');
     const req = fetchMock.mock.calls[0]?.[0] as Request;
     expect(req.method).toBe('GET');
-    expect(req.redirect).toBe('manual');
+    expect(req.redirect).toBe('follow');
     expect(req.url).toBe(SIGNED_URL);
     if (outcome.status !== 'saved') throw new Error('unreachable');
     const row = await getClientDataDb().artefacts.get(outcome.artefactId);
@@ -151,7 +158,23 @@ describe('saveMedia', () => {
     expect(await saveMedia(urlRef(), CTX)).toEqual({ status: 'failed', cause: 'unreachable' });
   });
 
-  it('reads a redirect as unreachable', async () => {
+  it('refuses a direct redirect that ends off https, cancelling the body', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ start: (c) => c.enqueue(MP3), cancel });
+    fetchMock.mockResolvedValueOnce(withUrl(new Response(body), 'http://cdn.example/a.mp3'));
+    expect(await saveMedia(urlRef(), CTX)).toEqual({ status: 'failed', cause: 'unreachable' });
+    expect(cancel).toHaveBeenCalled();
+    expect(await getClientDataDb().artefacts.count()).toBe(0);
+  });
+
+  it('saves a direct redirect that ends on another https host', async () => {
+    fetchMock.mockResolvedValueOnce(
+      withUrl(new Response(MP3), 'https://other-cdn.example/blob/a.mp3'),
+    );
+    expect((await saveMedia(urlRef(), CTX)).status).toBe('saved');
+  });
+
+  it('reads an unfollowed redirect as unreachable', async () => {
     fetchMock.mockResolvedValueOnce(Response.redirect('https://elsewhere.example/', 302));
     expect(await saveMedia(urlRef(), CTX)).toEqual({ status: 'failed', cause: 'unreachable' });
   });
@@ -199,6 +222,20 @@ describe('saveMedia', () => {
     expect(saveMedia(ref, CTX)).not.toBe(first);
   });
 
+  it('never joins the same key across two chats', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(MP3, { status: 200 }))
+      .mockResolvedValueOnce(new Response(MP3, { status: 200 }));
+    const ref = urlRef();
+    const a = saveMedia(ref, CTX);
+    const b = saveMedia(ref, { ...CTX, chatId: 'c2' });
+    expect(b).not.toBe(a);
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(ra.status).toBe('saved');
+    expect(rb.status).toBe('saved');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('answers duplicate for a key already saved in this chat, without fetching', async () => {
     const ref = urlRef();
     const existing = await addMediaArtefact({
@@ -240,7 +277,7 @@ describe('saveMedia', () => {
     fetchMock.mockResolvedValueOnce(new Response(MP3, { status: 200 }));
     const ref = urlRef();
     await saveMedia(ref, CTX);
-    expect(useMediaProgress.getState().byKey[ref.key]).toBeUndefined();
+    expect(useMediaProgress.getState().byKey[progressKey('c1', ref.key)]).toBeUndefined();
   });
 
   it('never puts the URL into any failure outcome', async () => {

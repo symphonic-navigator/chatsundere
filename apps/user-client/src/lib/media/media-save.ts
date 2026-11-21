@@ -43,19 +43,25 @@ export function isExpired(ref: Pick<MediaRef, 'expiresAt'>, now: number = Date.n
 
 const inFlight = new Map<string, Promise<MediaSaveOutcome>>();
 
-/** Single-flight per `ref.key`: a second call while one runs joins it. */
+/** The in-flight and `useMediaProgress` key of one save: per chat, so two chats never join. */
+export function progressKey(chatId: string, key: string): string {
+  return `${chatId}\u0000${key}`;
+}
+
+/** Single-flight per chat and `ref.key`: a second call while one runs joins it. */
 export function saveMedia(
   ref: MediaRef,
   ctx: MediaSaveContext,
   signal?: AbortSignal,
 ): Promise<MediaSaveOutcome> {
-  const running = inFlight.get(ref.key);
+  const pkey = progressKey(ctx.chatId, ref.key);
+  const running = inFlight.get(pkey);
   if (running) return running;
-  const promise = runSave(ref, ctx, signal).finally(() => {
-    inFlight.delete(ref.key);
-    useMediaProgress.getState().clear(ref.key);
+  const promise = runSave(ref, ctx, pkey, signal).finally(() => {
+    inFlight.delete(pkey);
+    useMediaProgress.getState().clear(pkey);
   });
-  inFlight.set(ref.key, promise);
+  inFlight.set(pkey, promise);
   return promise;
 }
 
@@ -68,6 +74,7 @@ class SaveFailure extends Error {
 async function runSave(
   ref: MediaRef,
   ctx: MediaSaveContext,
+  pkey: string,
   signal: AbortSignal | undefined,
 ): Promise<MediaSaveOutcome> {
   const existing = await findMediaArtefactByKey(ctx.chatId, ref.key);
@@ -79,7 +86,7 @@ async function runSave(
     bytes =
       ref.source.kind === 'bytes'
         ? checkBytes(decodeBase64(ref.source.base64), ref.mime)
-        : await download(ref, ref.source.url, signal);
+        : await download(ref, ref.source.url, pkey, signal);
   } catch (e) {
     // Only the cause leaves this function: fetch errors can carry the signed URL.
     return { status: 'failed', cause: e instanceof SaveFailure ? e.failCause : 'unreachable' };
@@ -153,9 +160,9 @@ function buildProxiedRequest(target: URL): (() => Request) | null {
 async function fetchMedia(url: string, signal: AbortSignal | undefined): Promise<Response> {
   const init = signal ? { signal } : undefined;
   try {
-    // Redirects are never followed: the ref names the file the MCP server returned,
-    // not wherever its host might send us.
-    return await fetch(new Request(url, { method: 'GET', redirect: 'manual' }), init);
+    // File hosts routinely redirect to a CDN, so redirects are followed; `download`
+    // refuses a final URL that left https (spec §5).
+    return await fetch(new Request(url, { method: 'GET', redirect: 'follow' }), init);
   } catch (e) {
     if (!(e instanceof TypeError) || signal?.aborted) throw new SaveFailure('unreachable');
     // A TypeError is most often CORS: the file host does not allow this origin.
@@ -168,10 +175,16 @@ async function fetchMedia(url: string, signal: AbortSignal | undefined): Promise
 async function download(
   ref: MediaRef,
   url: string,
+  pkey: string,
   signal: AbortSignal | undefined,
 ): Promise<Bytes> {
   const response = await fetchMedia(url, signal);
+  // The proxied route never follows, so its redirects arrive opaque.
   if (isOpaqueRedirect(response)) throw new SaveFailure('unreachable');
+  if (!isHttpsOrUnset(response.url)) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new SaveFailure('unreachable');
+  }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
     const nearExpiry = ref.expiresAt !== null && ref.expiresAt - Date.now() <= EXPIRY_GRACE_MS;
@@ -191,7 +204,7 @@ async function download(
   const chunks: Bytes[] = [];
   let done = 0;
   let sniffed = false;
-  progress.set(ref.key, 0, total);
+  progress.set(pkey, 0, total);
   try {
     for (;;) {
       const next = await reader.read();
@@ -205,7 +218,7 @@ async function download(
         if (!sniffAgrees(ref.mime, sniffMediaMime(concat(chunks, done).subarray(0, SNIFF_BYTES))))
           throw new SaveFailure('wrong-type');
       }
-      progress.set(ref.key, done, total);
+      progress.set(pkey, done, total);
     }
   } catch (e) {
     await reader.cancel().catch(() => undefined);
@@ -214,6 +227,16 @@ async function download(
   const bytes = concat(chunks, done);
   if (!sniffed) checkBytes(bytes, ref.mime);
   return bytes;
+}
+
+/** A constructed Response carries no URL; a fetched one always does. */
+function isHttpsOrUnset(url: string): boolean {
+  if (url === '') return true;
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function concat(chunks: Bytes[], length: number): Bytes {
