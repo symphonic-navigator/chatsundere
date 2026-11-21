@@ -120,17 +120,25 @@ function SavedItem({
   onOpenInTreasury,
 }: {
   item: MediaItem & { artefactId: string };
-  onOpenInTreasury: () => void;
+  onOpenInTreasury: (artefactId: string) => void;
 }): JSX.Element | null {
   const { data: artefact } = useQuery({
     // Under the 'artefacts' prefix, so rename, delete and blob hydration refresh it too.
     queryKey: ['artefacts', 'media-card', item.artefactId],
     queryFn: async () => (await getClientDataDb().artefacts.get(item.artefactId)) ?? null,
+    // No focus refetch under a playing file; invalidation (rename, delete) still refetches.
+    staleTime: Number.POSITIVE_INFINITY,
   });
   if (artefact === undefined) return <SettlingRow item={item} />;
   // A file deleted from the Treasury leaves nothing behind, as for generated images.
   if (artefact === null) return null;
-  return <MediaPlayer artefact={artefact} title={item.title} onOpenInTreasury={onOpenInTreasury} />;
+  return (
+    <MediaPlayer
+      artefact={artefact}
+      title={item.title}
+      onOpenInTreasury={() => onOpenInTreasury(artefact.id)}
+    />
+  );
 }
 
 function SettlingRow({ item }: { item: MediaItem }): JSX.Element {
@@ -222,13 +230,46 @@ function FailedRow({
   );
 }
 
-function scrollToArtefact(id: string | undefined): void {
-  if (!id) return;
-  const target = document.querySelector<HTMLElement>(`[data-media-artefact="${CSS.escape(id)}"]`);
-  target?.scrollIntoView({
-    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-    block: 'center',
-  });
+function findEarlierPlayer(ids: readonly (string | undefined)[]): HTMLElement | null {
+  for (const id of ids) {
+    if (!id) continue;
+    const el = document.querySelector<HTMLElement>(`[data-media-artefact="${CSS.escape(id)}"]`);
+    if (el) return el;
+  }
+  return null;
+}
+
+/**
+ * One marker for the files the chat already shows. The earlier players load on their own
+ * schedule (or were deleted), so their presence is watched rather than read once.
+ */
+function DuplicateMarker({ ids }: { ids: (string | undefined)[] }): JSX.Element {
+  const sig = ids.join('|');
+  const [present, setPresent] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the ids' signature
+  useEffect(() => {
+    const check = (): void => setPresent(findEarlierPlayer(ids) !== null);
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [sig]);
+  return (
+    <button
+      type="button"
+      className="media-card-duplicate"
+      aria-disabled={present ? undefined : 'true'}
+      title={present ? undefined : mediaCopy.duplicatesGone}
+      onClick={() => {
+        findEarlierPlayer(ids)?.scrollIntoView({
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+          block: 'center',
+        });
+      }}
+    >
+      {mediaCopy.duplicates(ids.length)}
+    </button>
+  );
 }
 
 /**
@@ -302,7 +343,8 @@ export function MediaCard({
     }
   }, [storedSig, chatId, personaId]);
 
-  const openInTreasury = (): void => navigate('/app/treasury?type=media');
+  const openInTreasury = (artefactId: string): void =>
+    navigate(`/app/treasury?type=media&open=${encodeURIComponent(artefactId)}`);
   const duplicates = items.filter((i) => i.status === 'duplicate');
   const shown = items.filter((i) => i.status !== 'duplicate');
   const refused = items[0]?.refused ?? 0;
@@ -336,15 +378,7 @@ export function MediaCard({
           })}
         </div>
       ) : null}
-      {duplicates.length > 0 ? (
-        <button
-          type="button"
-          className="media-card-duplicate"
-          onClick={() => scrollToArtefact(duplicates[0]?.artefactId)}
-        >
-          {mediaCopy.duplicates(duplicates.length)}
-        </button>
-      ) : null}
+      {duplicates.length > 0 ? <DuplicateMarker ids={duplicates.map((d) => d.artefactId)} /> : null}
       {refused > 0 ? <span className="media-card-note">{mediaCopy.refused(refused)}</span> : null}
     </div>
   );

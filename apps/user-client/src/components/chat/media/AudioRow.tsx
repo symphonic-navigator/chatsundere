@@ -27,6 +27,7 @@ export function SeekBar({
       aria-label={mediaCopy.seek(title)}
       aria-valuetext={mediaCopy.position(formatTime(current), formatTime(duration))}
       style={{ '--media-progress': `${percent}%` } as CSSProperties}
+      onPointerDown={() => controls.beginScrub()}
       onChange={(e) => controls.seek(Number(e.currentTarget.value))}
     />
   );

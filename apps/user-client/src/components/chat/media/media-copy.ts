@@ -31,6 +31,7 @@ export const mediaCopy = {
   linkExpired: 'The link has expired.',
   fullscreen: 'Fullscreen',
   duplicates: (n: number): string => `Same ${files(n)} as above`,
+  duplicatesGone: 'The earlier files are no longer in this chat.',
   refused: (n: number): string => `${files(n)} not shown: unsupported type`,
   provider: (serverLabel: string, toolName?: string): string =>
     toolName ? `${serverLabel} · ${toolName}` : serverLabel,

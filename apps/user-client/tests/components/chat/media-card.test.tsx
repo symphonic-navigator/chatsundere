@@ -13,6 +13,7 @@ import {
 } from '../../../src/boot/client-data-db.js';
 import { Pill } from '../../../src/components/chat/Pill.js';
 import { MediaCard } from '../../../src/components/chat/media/MediaCard.js';
+import { currentFloorOwner } from '../../../src/lib/media/media-floor.js';
 import type { MediaItem } from '../../../src/mcp/media-items.js';
 
 const m = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ vi.mock('../../../src/data/media-artefacts.js', async (orig) => ({
 
 // JSDOM's structuredClone drops Blob fields, which fake-indexeddb relies on;
 // re-attach them so a row's bytes survive the write (as in ImagePill.test.tsx).
+// Each read hands out a fresh Blob of the same bytes, as real IndexedDB does.
 {
   const orig = globalThis.structuredClone;
   globalThis.structuredClone = function blobPreservingClone<T>(
@@ -42,7 +44,8 @@ vi.mock('../../../src/data/media-artefacts.js', async (orig) => ({
       const source = value as Record<string, unknown>;
       const target = cloned as Record<string, unknown>;
       for (const key of Object.keys(source)) {
-        if (source[key] instanceof Blob) target[key] = source[key];
+        const blob = source[key];
+        if (blob instanceof Blob) target[key] = blob.slice(0, blob.size, blob.type);
       }
     }
     return cloned;
@@ -125,9 +128,10 @@ function saved(n: number, artefactId: string, kind: 'audio' | 'video' = 'audio')
   };
 }
 
-function renderCard(media: MediaItem[]): void {
-  render(
-    <QueryClientProvider client={new QueryClient()}>
+function renderCard(media: MediaItem[]): { client: QueryClient; unmount: () => void } {
+  const client = new QueryClient();
+  const { unmount } = render(
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <MediaCard
           pill={pillWith(media)}
@@ -139,6 +143,7 @@ function renderCard(media: MediaItem[]): void {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { client, unmount };
 }
 
 describe('MediaCard', () => {
@@ -301,8 +306,73 @@ describe('MediaCard', () => {
       { ...saved(1, 'a1'), status: 'duplicate' },
       { ...saved(2, 'a2'), status: 'duplicate' },
     ]);
-    expect(screen.getByRole('button', { name: 'Same 2 files as above' })).toBeTruthy();
+    const marker = screen.getByRole('button', { name: 'Same 2 files as above' });
     expect(screen.queryByRole('button', { name: /^Play / })).toBeNull();
+    // Nothing earlier in this chat to scroll to: greyed out with the reason.
+    expect(marker.getAttribute('aria-disabled')).toBe('true');
+    expect(marker.getAttribute('title')).toBe('The earlier files are no longer in this chat.');
+  });
+
+  it('enables the duplicate marker once the earlier player is on the page', async () => {
+    const earlier = document.createElement('div');
+    earlier.dataset.mediaArtefact = 'a1';
+    earlier.scrollIntoView = vi.fn();
+    document.body.appendChild(earlier);
+    try {
+      renderCard([{ ...saved(1, 'a1'), status: 'duplicate' }]);
+      const marker = screen.getByRole('button', { name: 'Same 1 file as above' });
+      await waitFor(() => expect(marker.getAttribute('aria-disabled')).toBeNull());
+      fireEvent.click(marker);
+      expect(earlier.scrollIntoView).toHaveBeenCalled();
+    } finally {
+      earlier.remove();
+    }
+  });
+
+  it('keeps the same source and playing state when the artefact queries refetch', async () => {
+    let n = 0;
+    const created = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:test-${++n}`);
+    await seed('a1', 'audio');
+    const { client } = renderCard([saved(1, 'a1')]);
+    await screen.findByRole('button', { name: 'Play Audio 1' });
+    const el = document.querySelector<HTMLAudioElement>('[data-media-element="a1"]');
+    await waitFor(() => expect(el?.getAttribute('src')).toBeTruthy());
+    const src = el?.getAttribute('src');
+    fireEvent.click(screen.getByRole('button', { name: 'Play Audio 1' }));
+    if (el) fireEvent.play(el);
+    expect(await screen.findByRole('button', { name: 'Pause Audio 1' })).toBeTruthy();
+    const before = created.mock.calls.length;
+
+    await client.invalidateQueries({ queryKey: ['artefacts'] });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(el?.getAttribute('src')).toBe(src);
+    expect(created.mock.calls.length).toBe(before);
+    expect(screen.getByRole('button', { name: 'Pause Audio 1' })).toBeTruthy();
+  });
+
+  it('gives the floor back on pause, on end, on a reset source and on unmount', async () => {
+    await seed('a1', 'audio');
+    const { unmount } = renderCard([saved(1, 'a1')]);
+    const play = await screen.findByRole('button', { name: 'Play Audio 1' });
+    const el = document.querySelector<HTMLAudioElement>('[data-media-element="a1"]');
+    await waitFor(() => expect(el?.getAttribute('src')).toBeTruthy());
+    if (!el) throw new Error('no element');
+
+    for (const stop of [fireEvent.pause, fireEvent.ended, fireEvent.emptied, fireEvent.abort]) {
+      fireEvent.click(play);
+      fireEvent.play(el);
+      expect(currentFloorOwner()).toBe('player:a1');
+      stop(el);
+      expect(currentFloorOwner()).toBeNull();
+      expect(screen.getByRole('button', { name: 'Play Audio 1' })).toBeTruthy();
+    }
+
+    fireEvent.click(play);
+    fireEvent.play(el);
+    expect(currentFloorOwner()).toBe('player:a1');
+    unmount();
+    expect(currentFloorOwner()).toBeNull();
   });
 
   it('notes refused files', async () => {

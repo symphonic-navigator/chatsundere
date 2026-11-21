@@ -14,6 +14,8 @@ export interface MediaElementProps {
   onTimeUpdate: (e: SyntheticEvent<HTMLMediaElement>) => void;
   onLoadedMetadata: (e: SyntheticEvent<HTMLMediaElement>) => void;
   onDurationChange: (e: SyntheticEvent<HTMLMediaElement>) => void;
+  onEmptied: () => void;
+  onAbort: () => void;
 }
 
 /** What a player reads and drives of its media element. */
@@ -28,6 +30,8 @@ export interface MediaElementControls {
   pause(): void;
   toggle(): void;
   seek(ms: number): void;
+  /** Call on pointerdown on the seek bar; ends by itself on the next pointerup or cancel. */
+  beginScrub(): void;
 }
 
 /**
@@ -45,18 +49,28 @@ export function useMediaElement(
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [elementDurationMs, setElementDurationMs] = useState<number | null>(null);
+  // While the thumb is dragged, timeupdate would pull it back to the playing position.
+  const scrubbing = useRef(false);
   const owner = `player:${artefactId}`;
 
+  // Every Dexie read hands out a new Blob of the same bytes, so the URL is keyed on the file
+  // and its size, not the Blob object: a new src would reset playback without a pause event.
+  const blobRef = useRef(blob);
+  blobRef.current = blob;
+  const hasBytes = blob !== null;
+  const size = blob?.size ?? 0;
   // Created inside the effect so each run revokes exactly the URL it made (ImagePill pattern).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the file, not the Blob instance
   useEffect(() => {
-    if (!blob) {
+    const current = blobRef.current;
+    if (!current) {
       setUrl(null);
       return undefined;
     }
-    const next = URL.createObjectURL(blob);
+    const next = URL.createObjectURL(current);
     setUrl(next);
     return () => URL.revokeObjectURL(next);
-  }, [blob]);
+  }, [artefactId, hasBytes, size]);
 
   useEffect(
     () => () => {
@@ -94,6 +108,24 @@ export function useMediaElement(
     setCurrentMs(ms);
   }, []);
 
+  const beginScrub = useCallback(() => {
+    scrubbing.current = true;
+    const end = (): void => {
+      scrubbing.current = false;
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+    };
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  }, []);
+
+  // The element stopped without a pause event: a new source, or loading was aborted.
+  const reset = (): void => {
+    setPlaying(false);
+    setCurrentMs(0);
+    releaseMediaFloor(owner);
+  };
+
   const readDuration = (e: SyntheticEvent<HTMLMediaElement>): void => {
     const seconds = e.currentTarget.duration;
     if (Number.isFinite(seconds) && seconds > 0) setElementDurationMs(Math.round(seconds * 1000));
@@ -123,7 +155,11 @@ export function useMediaElement(
         setPlaying(false);
         releaseMediaFloor(owner);
       },
-      onTimeUpdate: (e) => setCurrentMs(Math.round(e.currentTarget.currentTime * 1000)),
+      onTimeUpdate: (e) => {
+        if (!scrubbing.current) setCurrentMs(Math.round(e.currentTarget.currentTime * 1000));
+      },
+      onEmptied: reset,
+      onAbort: reset,
       onLoadedMetadata: readDuration,
       onDurationChange: readDuration,
     },
@@ -136,5 +172,6 @@ export function useMediaElement(
     pause,
     toggle,
     seek,
+    beginScrub,
   };
 }
