@@ -461,8 +461,16 @@ export type AttachmentOrigin = 'upload' | 'generated' | 'library';
 export type AttachmentState = 'active' | 'deleted';
 
 export type ArtefactOrigin = 'generated' | 'saved-message' | 'saved-code-block';
-export type ArtefactKind = 'text' | 'image';
-export type ArtefactFormat = 'html' | 'markdown' | 'code' | 'svg' | 'mermaid' | 'image';
+export type ArtefactKind = 'text' | 'image' | 'audio' | 'video';
+export type ArtefactFormat =
+  | 'html'
+  | 'markdown'
+  | 'code'
+  | 'svg'
+  | 'mermaid'
+  | 'image'
+  | 'audio'
+  | 'video';
 
 export interface ArtefactRow {
   id: string;
@@ -511,6 +519,8 @@ export interface ArtefactRow {
     modelLabel: string;
     configSnapshot: ImageModelConfig | LegacyImageModelConfig;
   };
+  /** kind audio|video — provenance, duration and the de-dup key. Non-indexed. */
+  mediaMeta?: { key: string; durationMs: number | null; serverName: string; toolName: string };
 }
 
 export interface AttachmentRow {

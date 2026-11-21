@@ -91,8 +91,26 @@ export function titleFromPrompt(prompt: string): string {
   return words.length > 0 ? words : 'Generated image';
 }
 
-function extensionForMime(mime: string): string {
-  return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'opus',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/webm': 'webm',
+  'audio/flac': 'flac',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
+
+/** File extension for a stored artefact's mime; unknown types fall back to `jpg` (images). */
+export function extensionForMime(mime: string): string {
+  return EXTENSION_BY_MIME[mime] ?? 'jpg';
 }
 
 export interface AddGeneratedImageArtefactInput {
