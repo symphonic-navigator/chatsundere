@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from 'react';
 import type { PillRow } from '../../boot/client-data-db.js';
+import { useMcpServers } from '../../data/mcp-servers.js';
 import { toolDisplayName } from '../../lib/tool-display-name.js';
 import type { McpAuthNotice as McpAuthNoticePayload } from '../../mcp/mcp-tools.js';
+import type { MediaItem } from '../../mcp/media-items.js';
 import { McpAuthNotice } from '../mcp/McpAuthNotice.js';
 import { McpRedirectNotice, readMcpRedirectNotice } from '../mcp/McpRedirectNotice.js';
 import { ArtefactPill } from './ArtefactPill.js';
@@ -11,6 +13,7 @@ import { ConnectorPill } from './ConnectorPill.js';
 import { ExpertPill } from './ExpertPill.js';
 import { ImagePill } from './ImagePill.js';
 import { VisionPill } from './VisionPill.js';
+import { MediaCard } from './media/MediaCard.js';
 
 const ICON: Record<PillRow['kind'], string> = {
   'tool-call': '⚙',
@@ -40,6 +43,52 @@ interface PillPayloadShape {
   mcpAuth?: McpAuthNoticePayload;
   /** Set by an MCP call whose server answered with a redirect; unchecked until read. */
   mcpRedirect?: unknown;
+  /** Audio and video an MCP result delivered, with their save state. */
+  media?: MediaItem[];
+}
+
+/**
+ * The server a wire tool name came from and the tool's own name, by its `<prefix>_` (the
+ * longest matching prefix wins). Unknown names, e.g. of a removed server, read as they are.
+ */
+function mcpToolOrigin(
+  wireName: string,
+  servers: readonly { name: string; prefix: string }[],
+): { serverLabel: string; toolName?: string } {
+  let best: { name: string; prefix: string } | null = null;
+  for (const s of servers) {
+    if (s.prefix !== '' && wireName.startsWith(`${s.prefix}_`)) {
+      if (!best || s.prefix.length > best.prefix.length) best = s;
+    }
+  }
+  if (!best) return { serverLabel: toolDisplayName(wireName) };
+  return { serverLabel: best.name, toolName: wireName.slice(best.prefix.length + 1) };
+}
+
+/** The block-level media card under an MCP tool pill; never inside its expandable detail. */
+function McpMediaBlock({
+  row,
+  chatId,
+  personaId,
+}: {
+  row: PillRow;
+  chatId: string | null;
+  personaId: string | null;
+}): JSX.Element {
+  const { data: servers } = useMcpServers();
+  const name = (row.payload as PillPayloadShape | undefined)?.name ?? '';
+  const origin = mcpToolOrigin(name, servers ?? []);
+  return (
+    <div className="media-card-block">
+      <MediaCard
+        pill={row}
+        chatId={chatId}
+        personaId={personaId}
+        serverLabel={origin.serverLabel}
+        {...(origin.toolName !== undefined ? { toolName: origin.toolName } : {})}
+      />
+    </div>
+  );
 }
 
 function labelFor(row: PillRow): string {
@@ -147,8 +196,10 @@ export function Pill({
   const code = codeOf(payload);
   const redirectNotice =
     row.kind === 'tool-call' ? readMcpRedirectNotice(payload?.mcpRedirect) : null;
+  const hasMedia =
+    row.kind === 'tool-call' && Array.isArray(payload?.media) && payload.media.length > 0;
 
-  return (
+  const inline = (
     <span className="pill-wrap">
       <button
         type="button"
@@ -199,5 +250,12 @@ export function Pill({
         </span>
       )}
     </span>
+  );
+  if (!hasMedia) return inline;
+  return (
+    <>
+      {inline}
+      <McpMediaBlock row={row} chatId={chatId ?? null} personaId={personaId ?? null} />
+    </>
   );
 }
