@@ -1,8 +1,8 @@
 # Audio and video from MCP tools in the chat — analysis and design proposal
 
-**Status:** DRAFT for Chris's review (2026-11-21). Not approved, no plan yet, Laura's spec-pass pending.
+**Status:** DRAFT for Chris's approval (2026-11-21). Laura's spec-pass done; her 4 hard defects are closed in §3.1–3.4, her soft notes taken except the polling merge (§3.5).
 **Target:** 0.6.0 from `master` ([ADR 0042](../../obsidian/decisions/0042-release-0.6-from-master-before-eidolon.md)).
-**Scope now:** groundwork for audio and video that MCP tools return, rendered in the chat. The real ElevenLabs and Higgsfield connections, and media in the Treasury (gallery), come later.
+**Scope now:** groundwork for audio and video that MCP tools return, rendered in the chat. The real ElevenLabs and Higgsfield connections, and the storage policy for media in the Treasury (gallery), come later.
 
 ---
 
@@ -68,7 +68,11 @@ From a `tools/call` result build `MediaRef[]`:
 - JSON text: walk parsed `structuredContent`, or the `text` if it parses as JSON, and take `https:` string values whose path ends in a known media extension (`.mp3 .wav .ogg .opus .m4a .aac .flac .mp4 .webm .mov .png .jpg .jpeg .webp .gif`) or whose sibling field says `modality`/`mime_type`/`content_type` audio or video. When a `preview_url` and a `full_res_url` point at the same thing, take the full one once.
 - Allow-list of mimes only; never HTML, SVG or anything scriptable from this path. Only `https:`.
 
-The text the model sees stays as it is today (it still needs `flow_id`, ids and so on to chain calls), plus one line: "N audio/video file(s) from this result are displayed to the user as players — refer to them in prose, do not repeat the URLs." Bytes never go to the model.
+**Duplicates.** A later status call returns the same files with fresh signatures (ElevenLabs tells the model to call it again to pick a variation). Media are keyed by the provider's `generation_id` when one sits beside the URL, else by the URL without its query string, across the whole chat. A repeat adds no artefact and no card, only a small marker "Same 4 audio files as above" that jumps to them.
+
+**Titles.** Generic file names (`content.*`, hashes) count as missing; rows are numbered "Audio 1–n" (or "Variation 1–n" when the provider marks variations).
+
+The text the model sees stays as it is today (it still needs `flow_id`, ids and so on to chain calls). The persist is awaited, with a timeout, before the result goes back to the model, as `generate_image` does, and one line reports the true outcome with the mapping: "Shown to the user as players: Audio 1 = generation ThV60…, Audio 2 = …; 1 file could not be saved (link unreachable). Refer to them by these names in prose, do not repeat the URLs." So "take number 2" means the same file to the user and to the model. Bytes never go to the model.
 
 ### 3.2 Fetch and persist
 
@@ -78,22 +82,42 @@ The text the model sees stays as it is today (it still needs `flow_id`, ids and 
 - Persist as `ArtefactRow` with `kind: 'audio' | 'video'`, `format: 'audio' | 'video'`, plus non-indexed `durationMs`, `posterBlob` (first video frame as JPEG, via an off-screen `<video>` + canvas), `source: {serverName, toolName, url}` for provenance. `kind` is not indexed, so no Dexie version bump.
 - MCP `image` results get the same treatment for free and render through the existing `ImagePill`/lightbox.
 
-### 3.3 The pill and the players (`components/chat/media/`)
+- Progress is reported in bytes ("Saving video · 12 of 28 MB").
+- Failures keep their cause: `expired` (from the signed URL's `Expires`, or a 403 after it), `unreachable` (network, CORS plus proxy, server error, app killed mid-fetch), `wrong-type` (sniff mismatch), `unsupported` (not on the allow-list). The pending source URL is kept on the artefact row until the bytes are saved, so a fetch can be retried; when a chat opens, unsaved media whose link is still valid are retried quietly.
 
-One `media-result` pill under the MCP tool-call pill, like the screenshot:
+### 3.3 The card and the players (`components/chat/media/`)
 
-- **Audio list (stacked card).** Each row: 44 px round play/pause, title (file name or "Audio 1…n"), `0:12 / 0:46` in tabular numerals, a seek bar on a native `<input type="range">` styled with Tailwind (keyboard, screen reader and touch work out of the box), a "⋯" menu with Download and "Open in Treasury". Durations read from metadata, so they show before anyone presses play.
-- **Video tile.** Poster frame, duration badge bottom-left, play glyph centre. Tap plays inline (`playsInline` for iOS) with the same transport bar overlaid, plus fullscreen. Width capped to the message column; aspect from metadata.
-- **One sound at a time.** A tiny media coordinator: starting a player pauses any other player **and pauses read-aloud** (and the other way round). Mirrors the read-aloud transport, no second audio world.
-- **States:** fetching (soft shimmer row, "Saving audio…"), ready, failed ("This link has expired — the file could not be saved" greyed out with the reason, disabled over hidden). While still valid, "Open original" is offered.
-- Styling per §11: opulent but quiet, monospace pill for the provider label (`ElevenLabs · creative_generate_in_flow`), respects the reduce-animations switch.
+A block-level media card under the MCP tool-call pill, always shown, never inside the pill's expandable detail (like `image-pill-block`). The tool pill above it keeps its usual collapsed behaviour.
+
+- **Audio row, two lines** (fits 380 px with a thumb-sized slider). Line 1: 44 px round play/pause, title, `0:12 / 0:46` in tabular numerals, "⋯". Line 2: a full-width seek bar on a native `<input type="range">` with a touch target at least 44 px tall (keyboard, screen reader and touch work out of the box). Durations come from metadata, so they show before anyone presses play.
+- **Video tile.** Poster frame, duration badge bottom-left, play glyph centre, "⋯" top-right, always visible. Tap plays inline (`playsInline` for iOS) with the same transport overlaid, plus fullscreen. Width capped to the message column; aspect from metadata.
+- **"⋯" menu** on both: Download, Open in Treasury, Open original (while the link is valid).
+- **States**, each with its own words, disabled over hidden:
+  - *Saving* — static shimmer with size and progress.
+  - *Ready.*
+  - *Downloading from your vault* — the record has synced, the bytes are on their way (`BlobSyncMarker`).
+  - *Lives only on the device that saved it* — over 32 MiB (`blobOversized`): player and Download greyed out with that reason; title, duration and poster still shown.
+  - *Couldn't save* — the cause in plain words ("The link has expired", "Couldn't reach the file", "This wasn't the audio it claimed to be"), with **Try again** and **Open original** while the link is valid, both greyed out with the reason once it has expired.
+  - Refused items get a note: "1 file not shown: unsupported type".
+- **One sound at a time.** A small media coordinator: starting a player pauses any other player and pauses read-aloud; read-aloud starting pauses the player. When a clip ends, read-aloud does **not** resume by itself; its transport stays paused with Resume. VoiceTransport's Exit leaves the player alone. **Live voice** joins the coordinator: starting a player holds the floor, a live turn pauses the player.
+- Styling per CLAUDE.md §11: opulent but quiet, monospace pill for the provider label (`ElevenLabs · creative_generate_in_flow`), respects the reduce-animations switch.
 - Lock-screen controls (Media Session) only after the read-aloud bridge passed its listening check; same constant pattern.
 
-### 3.4 Out of scope, and why
+### 3.4 Treasury, lightbox and picker in this release
+
+Media artefacts must not land on surfaces that cannot show them (Laura, hard).
+
+- `formatToType` (`lib/treasury-filter.ts`) gets `audio` and `video`; the Treasury gets an "Audio & video" tab whose tiles reuse the players.
+- `artefactToViewable` (`lightbox/viewable-item.ts`) renders the same `MediaPlayer` in the lightbox.
+- `ArtefactPicker` shows audio and video greyed out: "Audio and video can't be sent to a model yet."
+- Storage policy (what syncs, what expires) stays for the talk in §4.
+
+### 3.5 Out of scope, and why
 
 - **MCP Apps rendering** (provider HTML views in an iframe). Best fidelity, but it executes third-party HTML inside our client: sandbox, postMessage bridge, tool-call proxying, CSP. That needs its own ADR and a Larissa audit. Our native players cover the need without trusting provider code.
 - Audio input to models (multimodal), STT of returned media, uploads to providers.
 - Polling helpers for async jobs: the model already polls through the tools; we render whatever the final status call returns.
+- **Polling noise and a "being generated" placeholder.** A Higgsfield video can produce a dozen status-call pills. Merging consecutive calls to the same tool into one pill ("Checking progress · ×12") and a placeholder card from the first `creative_generate_*` result are a known gap, a follow-up unit.
 
 ## 4. Treasury (gallery) — considerations only
 
@@ -109,11 +133,12 @@ One `media-result` pill under the MCP tool-call pill, like the screenshot:
 
 ## 6. Proposed units
 
-1. `media-extract` + tests (pure).
-2. Persist path (fetch, proxy fallback, sniff, poster, artefact kinds) + tests.
-3. `MediaPlayer` (audio row, video tile) + media coordinator with read-aloud.
-4. Wire into `mcp-tools.ts` / `mcp-client.ts` (return content beyond text) and the pill.
-5. Docs: README, STATUS, ADR "native players instead of MCP Apps for media".
+1. `media-extract` + tests (pure): the three channels, de-duplication, titles.
+2. Persist path (fetch, proxy fallback, sniff, progress, poster, failure causes, retry, artefact kinds) + tests.
+3. `MediaPlayer` (audio row, video tile, all states) + media coordinator with read-aloud and live voice.
+4. Wire into `mcp-client.ts` / `mcp-tools.ts` (content beyond text, truthful model line) and the card.
+5. Treasury tab, lightbox, picker (§3.4).
+6. Docs: README, STATUS, ADR "native players instead of MCP Apps for media".
 
 ## 7. Decisions
 
@@ -123,7 +148,11 @@ One `media-result` pill under the MCP tool-call pill, like the screenshot:
 
 ## Manual verification (to be completed with the final spec)
 
-- Ask a persona with ElevenLabs connected for a short music piece; four players appear, durations show before play, only one plays at a time, seek works by thumb at 380 px.
-- Reload the chat next day: players still play (bytes persisted, link expired).
-- Video from ElevenLabs or Higgsfield: poster and duration, inline play on iPhone and Android, fullscreen.
-- Read-aloud running, start a player: read-aloud pauses.
+- Ask a persona with ElevenLabs connected for a short music piece: four players "Audio 1–4", durations before play, one plays at a time, seek by thumb at 380 px.
+- Ask it to "take number 2" for something: the status call adds no second set of players, only the marker, and the model uses the right generation.
+- Reload the chat the next day: players still play (bytes saved, link expired).
+- Flight mode while the result arrives: "Couldn't reach the file" with Try again; back online, Try again saves it.
+- Video from ElevenLabs or Higgsfield: poster, duration, inline play on iPhone and Android, fullscreen, Download from "⋯".
+- Second device: the media show "Downloading from your vault", then play; a video over 32 MiB shows "Lives only on the device that saved it".
+- Read-aloud running, start a player: read-aloud pauses and stays paused after the clip. Live voice: a turn pauses the player.
+- Treasury: "Audio & video" tab plays; lightbox plays; the picker shows media greyed out with the reason.
