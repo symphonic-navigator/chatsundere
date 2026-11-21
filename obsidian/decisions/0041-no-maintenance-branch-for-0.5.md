@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-18). An exception to [ADR 0039](0039-maintenance-branches-and-version-diary.md) for the 0.5 line only; the process is amended in [`obsidian/RELEASE-PROCESS.md`](../RELEASE-PROCESS.md).
+Superseded by [ADR 0042](0042-release-0.6-from-master-before-eidolon.md) (2026-11-21). Accepted (2026-11-18). An exception to [ADR 0039](0039-maintenance-branches-and-version-diary.md) for the 0.5 line only; the process is amended in [`obsidian/RELEASE-PROCESS.md`](../RELEASE-PROCESS.md).
 
 ## Context
 

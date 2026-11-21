@@ -1,7 +1,7 @@
 # Audio and video from MCP tools in the chat — analysis and design proposal
 
 **Status:** DRAFT for Chris's review (2026-11-21). Not approved, no plan yet, Laura's spec-pass pending.
-**Target:** a 0.6.0 between 0.5.x and Eidolon (see §7, release question).
+**Target:** 0.6.0 from `master` ([ADR 0042](../../obsidian/decisions/0042-release-0.6-from-master-before-eidolon.md)).
 **Scope now:** groundwork for audio and video that MCP tools return, rendered in the chat. The real ElevenLabs and Higgsfield connections, and media in the Treasury (gallery), come later.
 
 ---
@@ -115,11 +115,11 @@ One `media-result` pill under the MCP tool-call pill, like the screenshot:
 4. Wire into `mcp-tools.ts` / `mcp-client.ts` (return content beyond text) and the pill.
 5. Docs: README, STATUS, ADR "native players instead of MCP Apps for media".
 
-## 7. Open questions for Chris
+## 7. Decisions
 
-1. **Release line:** ADR 0041 says `master` carries only 0.5.x fixes and the next version builds on `eidolon`. A 0.6.0 with this feature needs a decision: cut 0.6.0 from `master` before Eidolon (and amend ADR 0041), or ship it as part of the `eidolon` line.
-2. Video default for sync: device-only until the storage talk?
-3. MCP Apps later, or never?
+1. **Release line (Chris, 2026-11-21):** 0.6.0 from `master`; Eidolon starts in 2027. Written down in [ADR 0042](../../obsidian/decisions/0042-release-0.6-from-master-before-eidolon.md), which supersedes ADR 0041.
+2. **Sync of media (default, until the storage talk):** no new switch. Audio and video sync like images do today: up to 32 MiB per file, larger files stay on the device through the existing `blobOversized` path, which the UI already explains. The storage talk (§4) may change this for video.
+3. **MCP Apps:** not now. A later, separate ADR with a Larissa audit, if native players turn out not to be enough.
 
 ## Manual verification (to be completed with the final spec)
 

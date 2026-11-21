@@ -6,14 +6,14 @@ How Chatsundere is versioned and released, from [ADR 0039](decisions/0039-mainte
 
 | Branch | What it is | Where it runs |
 |---|---|---|
-| `master` | the next minor release (from `v0.5.0` until Eidolon: the released 0.5 line, see the exception below) | locally and on staging |
-| `maintenance/X.Y` | the maintenance line of a released minor version (the latest: `maintenance/0.4`, cut from `v0.4.0`) | in production, through its tags |
+| `master` | the next minor release (0.6.0, [ADR 0042](decisions/0042-release-0.6-from-master-before-eidolon.md)) | locally and on staging |
+| `maintenance/X.Y` | the maintenance line of a released minor version (the latest: `maintenance/0.5`, cut from `master` at the 0.6 cut-over; `maintenance/0.4` before it) | in production, through its tags |
 
-`version.txt` holds the version a branch is preparing: `0.5.0` on `master`, `0.4.1` on `maintenance/0.4`. Untagged builds are `<version.txt>-pre.<run>`.
+`version.txt` holds the version a branch is preparing: `0.6.0` on `master`, `0.5.1` on `maintenance/0.5`. Untagged builds are `<version.txt>-pre.<run>`.
 
-## Exception: the 0.5 line ([ADR 0041](decisions/0041-no-maintenance-branch-for-0.5.md))
+## Former exception: the 0.5 line
 
-From `v0.5.0` until Eidolon lands, the roles are swapped. There is no `maintenance/0.5`. `master` carries the released 0.5.x (`version.txt` `0.5.1` after the tag) and takes only what this page sends to a maintenance branch: curated models and offerings, security fixes, fixes of faults in 0.5. Patch releases are tagged on `master` with the steps of a maintenance release, minus the forward port. The next version builds on a long-lived `eidolon` branch, created once the 0.5.0 work is finished. `master` is merged into it regularly. When Eidolon is ready, it is merged into `master`, the next minor is released from there, and the table below holds again.
+From `v0.5.0` to 2026-11-21 there was no `maintenance/0.5` ([ADR 0041](decisions/0041-no-maintenance-branch-for-0.5.md)). [ADR 0042](decisions/0042-release-0.6-from-master-before-eidolon.md) ended that: at the cut-over `maintenance/0.5` is cut from `master` with `version.txt` `0.5.1`, and `master` moves to `0.6.0`.
 
 ## What goes where
 
