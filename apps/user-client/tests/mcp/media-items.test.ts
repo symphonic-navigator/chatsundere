@@ -35,14 +35,14 @@ describe('titleFor', () => {
 });
 
 describe('modelLineFor', () => {
-  it('maps saved files and counts the failed one with its cause', () => {
+  it('maps saved files and names the failed one with its cause', () => {
     const line = modelLineFor([
       item('gen:G1', 'saved', { title: 'Audio 1', artefactId: 'a1' }),
       item('gen:G2', 'saved', { title: 'Audio 2', artefactId: 'a2' }),
       item('gen:G3', 'failed', { title: 'Audio 3', cause: 'unreachable' }),
     ]);
     expect(line).toBe(
-      'Shown to the user as players: Audio 1 = generation G1, Audio 2 = generation G2. 1 file could not be saved (could not reach the file). Refer to them by these names in prose; do not repeat their URLs.',
+      'Shown to the user as players: Audio 1 = generation G1, Audio 2 = generation G2. Audio 3 could not be saved (could not reach the file). Refer to them by these names in prose; do not repeat their URLs.',
     );
   });
 
@@ -65,6 +65,20 @@ describe('modelLineFor', () => {
     expect(line).toContain('Audio 1 and Audio 2 are the same files already shown above.');
   });
 
+  it('names the earlier file a duplicate repeats when its title is known', () => {
+    const line = modelLineFor(
+      [
+        item('gen:G1', 'saved', { title: 'Audio 1', artefactId: 'a1' }),
+        item('gen:G2', 'duplicate', { title: 'Audio 2', artefactId: 'a0' }),
+        item('gen:G3', 'duplicate', { title: 'Audio 3', artefactId: 'ax' }),
+      ],
+      new Map([['a0', 'Morning Birdsong']]),
+    );
+    expect(line).toContain(
+      'Audio 2 here is the same file as "Morning Birdsong" shown above. Audio 3 is the same file already shown above.',
+    );
+  });
+
   it('names URL-keyed files by their position', () => {
     const line = modelLineFor([
       item('url:https://cdn.example/a.mp3', 'saved', { title: 'Audio 1' }),
@@ -76,11 +90,11 @@ describe('modelLineFor', () => {
 
   it('reports refused files and an all-failed result truthfully', () => {
     const line = modelLineFor([
-      item('gen:G1', 'failed', { cause: 'expired', refused: 2 }),
-      item('gen:G2', 'failed', { cause: 'wrong-type' }),
+      item('gen:G1', 'failed', { title: 'Audio 1', cause: 'expired', refused: 2 }),
+      item('gen:G2', 'failed', { title: 'Audio 2', cause: 'wrong-type' }),
     ]);
     expect(line).toBe(
-      'No file could be shown to the user. 2 files could not be saved (the link had expired; it was not the audio or video it claimed to be). 2 files were not shown: unsupported type. Do not repeat their URLs.',
+      'No file could be shown to the user. Audio 1 could not be saved (the link had expired). Audio 2 could not be saved (it was not the audio or video it claimed to be). 2 files were not shown: unsupported type. Do not repeat their URLs.',
     );
   });
 });

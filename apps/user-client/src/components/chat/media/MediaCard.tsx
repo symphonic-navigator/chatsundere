@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type ArtefactRow, type PillRow, getClientDataDb } from '../../../boot/client-data-db.js';
 import { findMediaArtefactByKey, patchMediaPillItem } from '../../../data/media-artefacts.js';
@@ -8,6 +8,7 @@ import { QK } from '../../../data/queryKeys.js';
 import { triggerDownload } from '../../../lib/download.js';
 import {
   type MediaSaveOutcome,
+  awaitInFlightSave,
   isExpired,
   progressKey,
   saveMedia,
@@ -146,7 +147,8 @@ function SavedItem({
 
 function SettlingRow({ item }: { item: MediaItem }): JSX.Element {
   return (
-    <div className="media-state" data-state="settling">
+    // The artefact id lets a later card's duplicate marker find this one while it settles.
+    <div className="media-state" data-state="settling" data-media-artefact={item.artefactId}>
       <span className="media-state-glyph" aria-hidden>
         {GLYPH[item.kind]}
       </span>
@@ -164,7 +166,7 @@ function SavingRow({ item, chatId }: { item: MediaItem; chatId: string | null })
       ? Math.min(1, progress.done / progress.total)
       : null;
   return (
-    <div className="media-state" data-state="saving">
+    <div className="media-state" data-state="saving" data-media-artefact={item.artefactId}>
       <div className="media-state-line">
         <span className="media-state-glyph" aria-hidden>
           {GLYPH[item.kind]}
@@ -188,11 +190,16 @@ function FailedRow({
   canSave: boolean;
   onRetry: () => void;
 }): JSX.Element {
+  const causeId = useId();
+  const reasonId = useId();
   const source = item.source;
   const expired = source ? isExpired(source) : false;
   const cause = expired ? 'expired' : (item.cause ?? 'unreachable');
   const reason = expired ? mediaCopy.linkExpired : null;
-  const retryDisabled = expired || !canSave;
+  // Expired and too-large say why in the cause line already; only "cannot save" needs its own.
+  const causeExplains = cause === 'expired' || cause === 'too-large';
+  const retryDisabled = causeExplains || !canSave;
+  const retryReasonId = causeExplains ? causeId : retryDisabled ? reasonId : undefined;
   return (
     <div className="media-state" data-state="failed">
       <div className="media-state-line">
@@ -201,33 +208,44 @@ function FailedRow({
         </span>
         <span className="media-title">{item.title}</span>
       </div>
-      <span className="media-state-text">{mediaCopy.failed[cause]}</span>
+      <span className="media-state-text" id={causeId}>
+        {mediaCopy.failed[cause]}
+      </span>
       {source ? (
-        <span className="media-state-actions">
-          <button
-            type="button"
-            className="media-action"
-            aria-disabled={retryDisabled ? 'true' : undefined}
-            title={reason ?? undefined}
-            onClick={() => {
-              if (!retryDisabled) onRetry();
-            }}
-          >
-            {mediaCopy.tryAgain}
-          </button>
-          <button
-            type="button"
-            className="media-action"
-            aria-disabled={expired ? 'true' : undefined}
-            title={reason ?? undefined}
-            onClick={() => {
-              if (expired || !source.url.startsWith('https://')) return;
-              window.open(source.url, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            {mediaCopy.openOriginal}
-          </button>
-        </span>
+        <>
+          <span className="media-state-actions">
+            <button
+              type="button"
+              className="media-action"
+              aria-disabled={retryDisabled ? 'true' : undefined}
+              aria-describedby={retryReasonId}
+              title={reason ?? undefined}
+              onClick={() => {
+                if (!retryDisabled) onRetry();
+              }}
+            >
+              {mediaCopy.tryAgain}
+            </button>
+            <button
+              type="button"
+              className="media-action"
+              aria-disabled={expired ? 'true' : undefined}
+              aria-describedby={expired ? causeId : undefined}
+              title={reason ?? undefined}
+              onClick={() => {
+                if (expired || !source.url.startsWith('https://')) return;
+                window.open(source.url, '_blank', 'noopener,noreferrer');
+              }}
+            >
+              {mediaCopy.openOriginal}
+            </button>
+          </span>
+          {retryDisabled && !causeExplains ? (
+            <span className="media-state-reason" id={reasonId}>
+              {mediaCopy.cannotFetchAgain}
+            </span>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -257,21 +275,30 @@ function DuplicateMarker({ ids }: { ids: (string | undefined)[] }): JSX.Element 
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [sig]);
+  const reasonId = useId();
   return (
-    <button
-      type="button"
-      className="media-card-duplicate"
-      aria-disabled={present ? undefined : 'true'}
-      title={present ? undefined : mediaCopy.duplicatesGone}
-      onClick={() => {
-        findEarlierPlayer(ids)?.scrollIntoView({
-          behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-          block: 'center',
-        });
-      }}
-    >
-      {mediaCopy.duplicates(ids.length)}
-    </button>
+    <>
+      <button
+        type="button"
+        className="media-card-duplicate"
+        aria-disabled={present ? undefined : 'true'}
+        aria-describedby={present ? undefined : reasonId}
+        title={present ? undefined : mediaCopy.duplicatesGone}
+        onClick={() => {
+          findEarlierPlayer(ids)?.scrollIntoView({
+            behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+            block: 'center',
+          });
+        }}
+      >
+        {mediaCopy.duplicates(ids.length)}
+      </button>
+      {present ? null : (
+        <span className="media-card-note" id={reasonId}>
+          {mediaCopy.duplicatesGone}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -294,7 +321,10 @@ export function MediaCard({
   toolName?: string;
 }): JSX.Element {
   const navigate = useNavigate();
-  const stored = ((pill.payload as { media?: unknown } | undefined)?.media ?? []) as MediaItem[];
+  const payload = pill.payload as { media?: unknown; mediaRefused?: unknown } | undefined;
+  const stored = (payload?.media ?? []) as MediaItem[];
+  // A result whose files were all refused has no item to carry the count.
+  const refusedAlone = typeof payload?.mediaRefused === 'number' ? payload.mediaRefused : 0;
   // The pill row re-reads only when its chat query refetches, so a settled item shows at once.
   const [overrides, setOverrides] = useState<Record<string, Partial<MediaItem>>>({});
   const items = stored.map((item) => ({ ...item, ...overrides[item.key] }));
@@ -320,10 +350,34 @@ export function MediaCard({
       },
       { chatId, personaId, serverName: serverLabel, toolName: toolName ?? '', title: item.title },
     ).catch((): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }));
+    await settleFrom(item.key, outcome);
+  };
+
+  const settleFrom = (key: string, outcome: MediaSaveOutcome): Promise<void> =>
     // A duplicate of this card's own key is its own earlier save finishing, not a repeat.
-    if (outcome.status === 'failed')
-      await settle(item.key, { status: 'failed', cause: outcome.cause });
-    else await settle(item.key, { status: 'saved', artefactId: outcome.artefactId });
+    outcome.status === 'failed'
+      ? settle(key, { status: 'failed', cause: outcome.cause })
+      : settle(key, { status: 'saved', artefactId: outcome.artefactId });
+
+  // Inline bytes cannot be fetched again: join the tool's save if it still runs, else find
+  // the finished one by its key, else nothing will ever arrive and the item has failed.
+  const settleInline = async (key: string, chat: string): Promise<void> => {
+    const running = awaitInFlightSave(chat, key);
+    if (running) {
+      const outcome = await running.catch(
+        (): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }),
+      );
+      await settleFrom(key, outcome);
+      return;
+    }
+    let row: ArtefactRow | undefined;
+    try {
+      row = await findMediaArtefactByKey(chat, key);
+    } catch {
+      return; // An unreadable store says nothing about the file; leave it for the next look.
+    }
+    if (row) await settle(key, { status: 'saved', artefactId: row.id });
+    else await settle(key, { status: 'failed', cause: 'unreachable' });
   };
 
   const storedSig = stored.map((i) => `${i.key}:${i.status}`).join('|');
@@ -333,11 +387,8 @@ export function MediaCard({
       if (item.status !== 'saving' || started.current.has(item.key)) continue;
       started.current.add(item.key);
       if (!item.source) {
-        // Inline bytes cannot be fetched again; a finished save is found by its key.
         if (chatId === null) continue;
-        void findMediaArtefactByKey(chatId, item.key).then((row) => {
-          if (row) void settle(item.key, { status: 'saved', artefactId: row.id });
-        });
+        void settleInline(item.key, chatId);
       } else if (isExpired(item.source)) {
         void settle(item.key, { status: 'failed', cause: 'expired' });
       } else {
@@ -350,7 +401,7 @@ export function MediaCard({
     navigate(`/app/treasury?type=media&open=${encodeURIComponent(artefactId)}`);
   const duplicates = items.filter((i) => i.status === 'duplicate');
   const shown = items.filter((i) => i.status !== 'duplicate');
-  const refused = items[0]?.refused ?? 0;
+  const refused = items[0]?.refused ?? refusedAlone;
 
   return (
     <div className="media-card">

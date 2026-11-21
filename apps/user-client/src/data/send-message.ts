@@ -238,7 +238,16 @@ async function resolvePersonaContextForChat(
     authNotices: new Map(),
   });
   const mcp = mcpBase
-    ? { ...mcpBase, media: { chatId, personaId: persona.id, save: saveMedia } }
+    ? {
+        ...mcpBase,
+        media: {
+          chatId,
+          personaId: persona.id,
+          save: saveMedia,
+          titleOf: async (artefactId: string) =>
+            (await getClientDataDb().artefacts.get(artefactId))?.title ?? null,
+        },
+      }
     : null;
 
   return {

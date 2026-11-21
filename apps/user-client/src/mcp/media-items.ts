@@ -23,6 +23,8 @@ export interface McpMediaContext {
   chatId: string;
   personaId: string;
   save: typeof saveMedia;
+  /** The stored title of an earlier artefact, so the model can name what a duplicate repeats. */
+  titleOf?: (artefactId: string) => Promise<string | null>;
 }
 
 const KIND_LABEL: Record<MediaKind, string> = { audio: 'Audio', video: 'Video' };
@@ -60,9 +62,13 @@ export function refusedLine(refused: number): string {
 
 /**
  * The one line appended to the tool output that tells the model what the user truly sees,
- * with the names to use for each file. Never carries a URL.
+ * with the names to use for each file. Never carries a URL. `earlierTitles` maps the
+ * artefact a duplicate repeats to its title, where the tool could look it up.
  */
-export function modelLineFor(items: MediaItem[]): string {
+export function modelLineFor(
+  items: MediaItem[],
+  earlierTitles?: ReadonlyMap<string, string>,
+): string {
   const sentences: string[] = [];
   const shown = items.filter((i) => i.status !== 'failed');
   const describe = (item: MediaItem): string => {
@@ -85,17 +91,27 @@ export function modelLineFor(items: MediaItem[]): string {
     );
   }
   const duplicates = items.filter((i) => i.status === 'duplicate');
-  if (duplicates.length > 0) {
+  const unnamed: MediaItem[] = [];
+  for (const item of duplicates) {
+    const earlier = item.artefactId ? earlierTitles?.get(item.artefactId) : undefined;
+    if (earlier) sentences.push(`${item.title} here is the same file as "${earlier}" shown above.`);
+    else unnamed.push(item);
+  }
+  if (unnamed.length > 0) {
     sentences.push(
-      duplicates.length === 1
-        ? `${names(duplicates)} is the same file already shown above.`
-        : `${names(duplicates)} are the same files already shown above.`,
+      unnamed.length === 1
+        ? `${names(unnamed)} is the same file already shown above.`
+        : `${names(unnamed)} are the same files already shown above.`,
     );
   }
   const failed = items.filter((i) => i.status === 'failed');
-  if (failed.length > 0) {
-    const causes = [...new Set(failed.map((i) => CAUSE_PHRASE[i.cause ?? 'unreachable']))];
-    sentences.push(`${files(failed.length)} could not be saved (${causes.join('; ')}).`);
+  const byCause = new Map<MediaFailCause, MediaItem[]>();
+  for (const item of failed) {
+    const cause = item.cause ?? 'unreachable';
+    byCause.set(cause, [...(byCause.get(cause) ?? []), item]);
+  }
+  for (const [cause, group] of byCause) {
+    sentences.push(`${names(group)} could not be saved (${CAUSE_PHRASE[cause]}).`);
   }
   const refused = items[0]?.refused ?? 0;
   if (refused > 0) sentences.push(refusedLine(refused));

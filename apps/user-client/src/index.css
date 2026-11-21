@@ -4293,6 +4293,11 @@ h1 {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+/* Why Try again is greyed out, in view: a title never shows on touch. */
+.media-state-reason {
+  font-size: 0.72rem;
+  color: var(--color-paper-soft);
+}
 .media-state-bar {
   position: relative;
   display: block;

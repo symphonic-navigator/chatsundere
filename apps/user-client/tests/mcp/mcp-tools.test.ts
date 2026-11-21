@@ -757,7 +757,29 @@ describe('contributeMcpTools with media in the result', () => {
     expect(r?.ok).toBe(true);
     const media = r?.meta?.media as Array<Record<string, unknown>>;
     expect(media[0]).toMatchObject({ status: 'failed', cause: 'unreachable' });
-    expect(r?.output).toContain('1 file could not be saved (could not reach the file).');
+    expect(r?.output).toContain('Audio 1 could not be saved (could not reach the file).');
+  });
+
+  it('carries a refused-only result to the card and keeps the model line', async () => {
+    const raw = { content: [{ type: 'audio', data: 'SUQz', mimeType: 'audio/x-tracker' }] };
+    vi.mocked(mcpToolsCall).mockResolvedValue({ stdout: 'done', error: null, raw });
+    const save = vi.fn();
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const r = await tool?.execute({});
+    expect(r?.output).toBe('done\n\n1 file was not shown: unsupported type.');
+    expect(r?.meta).toEqual({ media: [], mediaRefused: 1 });
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('tells the model the earlier title of a duplicate it can look up', async () => {
+    withRaw();
+    const save = vi.fn(async () => ({ status: 'duplicate' as const, artefactId: 'a0' }));
+    const titleOf = vi.fn(async (id: string) => (id === 'a0' ? 'Morning Birdsong' : null));
+    const [tool] = contributeMcpTools(
+      ctx({ media: { chatId: 'c1', personaId: 'p1', save, titleOf } }),
+    );
+    const r = await tool?.execute({});
+    expect(r?.output).toContain('Audio 1 here is the same file as "Morning Birdsong" shown above.');
   });
 
   it('leaves the result as it was without a media context', async () => {

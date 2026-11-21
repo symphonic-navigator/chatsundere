@@ -48,6 +48,14 @@ export function progressKey(chatId: string, key: string): string {
   return `${chatId}\u0000${key}`;
 }
 
+/**
+ * The save of `key` still running in this chat, to join without starting one; null when
+ * none is. Inline bytes cannot be fetched again, so a card can only wait on the tool's save.
+ */
+export function awaitInFlightSave(chatId: string, key: string): Promise<MediaSaveOutcome> | null {
+  return inFlight.get(progressKey(chatId, key)) ?? null;
+}
+
 /** Single-flight per chat and `ref.key`: a second call while one runs joins it. */
 export function saveMedia(
   ref: MediaRef,

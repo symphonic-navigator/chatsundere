@@ -18,12 +18,14 @@ import type { MediaItem } from '../../../src/mcp/media-items.js';
 
 const m = vi.hoisted(() => ({
   saveMedia: vi.fn(),
+  join: vi.fn((): Promise<unknown> | null => null),
   patch: vi.fn(async () => true),
 }));
 
 vi.mock('../../../src/lib/media/media-save.js', async (orig) => ({
   ...(await orig<typeof import('../../../src/lib/media/media-save.js')>()),
   saveMedia: m.saveMedia,
+  awaitInFlightSave: m.join,
 }));
 vi.mock('../../../src/data/media-artefacts.js', async (orig) => ({
   ...(await orig<typeof import('../../../src/data/media-artefacts.js')>()),
@@ -61,6 +63,8 @@ beforeEach(async () => {
   await _resetClientDataDbForTests();
   await openClientDataDb();
   m.saveMedia.mockReset();
+  m.join.mockReset();
+  m.join.mockReturnValue(null);
   m.patch.mockClear();
   paused = [];
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
@@ -128,15 +132,18 @@ function saved(n: number, artefactId: string, kind: 'audio' | 'video' = 'audio')
   };
 }
 
-function renderCard(media: MediaItem[]): { client: QueryClient; unmount: () => void } {
+function renderCard(
+  media: MediaItem[],
+  opts: { personaId?: string | null; pill?: PillRow } = {},
+): { client: QueryClient; unmount: () => void } {
   const client = new QueryClient();
   const { unmount } = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <MediaCard
-          pill={pillWith(media)}
+          pill={opts.pill ?? pillWith(media)}
           chatId="c1"
-          personaId="pe1"
+          personaId={opts.personaId === undefined ? 'pe1' : opts.personaId}
           serverLabel="ElevenLabs"
           toolName="creative_generate_in_flow"
         />
@@ -144,6 +151,32 @@ function renderCard(media: MediaItem[]): { client: QueryClient; unmount: () => v
     </QueryClientProvider>,
   );
   return { client, unmount };
+}
+
+const inlineSaving = (over: Partial<MediaItem> = {}): MediaItem => ({
+  key: 'bytes:abc:12',
+  kind: 'audio',
+  mime: 'audio/mpeg',
+  title: 'Audio 1',
+  status: 'saving',
+  ...over,
+});
+
+const failedUrl = (over: Partial<MediaItem> = {}): MediaItem => ({
+  key: 'url:https://cdn.example/x.mp3',
+  kind: 'audio',
+  mime: 'audio/mpeg',
+  title: 'Audio 1',
+  status: 'failed',
+  cause: 'unreachable',
+  source: { url: 'https://cdn.example/x.mp3', expiresAt: FUTURE },
+  ...over,
+});
+
+/** The visible text a disabled control points at as its reason. */
+function reasonOf(el: HTMLElement): string {
+  const ids = el.getAttribute('aria-describedby')?.split(' ') ?? [];
+  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
 }
 
 describe('MediaCard', () => {
@@ -235,6 +268,7 @@ describe('MediaCard', () => {
       const button = screen.getByRole('button', { name });
       expect(button.getAttribute('aria-disabled')).toBe('true');
       expect(button.getAttribute('title')).toBe('The link has expired.');
+      expect(reasonOf(button)).toBe('The link has expired, so the file could not be saved.');
       fireEvent.click(button);
     }
     expect(m.saveMedia).not.toHaveBeenCalled();
@@ -261,6 +295,76 @@ describe('MediaCard', () => {
       ),
     );
     expect(m.saveMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it('joins a save of inline bytes still in flight and settles it from its outcome', async () => {
+    let finish: (o: unknown) => void = () => undefined;
+    m.join.mockReturnValue(
+      new Promise((r) => {
+        finish = r;
+      }),
+    );
+    renderCard([inlineSaving()]);
+    expect(screen.getByText('Saving audio…')).toBeTruthy();
+    await waitFor(() => expect(m.join).toHaveBeenCalledWith('c1', 'bytes:abc:12'));
+    finish({ status: 'duplicate', artefactId: 'a7' });
+    await waitFor(() =>
+      expect(m.patch).toHaveBeenCalledWith('pill-1', 'bytes:abc:12', {
+        status: 'saved',
+        artefactId: 'a7',
+      }),
+    );
+    expect(m.saveMedia).not.toHaveBeenCalled();
+  });
+
+  it('settles inline bytes already saved by their key', async () => {
+    await seed('a1', 'audio', {
+      mediaMeta: {
+        key: 'bytes:abc:12',
+        durationMs: 46_000,
+        serverName: 'ElevenLabs',
+        toolName: 't',
+      },
+    });
+    renderCard([inlineSaving()]);
+    await waitFor(() =>
+      expect(m.patch).toHaveBeenCalledWith('pill-1', 'bytes:abc:12', {
+        status: 'saved',
+        artefactId: 'a1',
+      }),
+    );
+    expect(await screen.findByRole('button', { name: 'Play Audio 1' })).toBeTruthy();
+  });
+
+  it('fails inline bytes that are neither saved nor still saving', async () => {
+    renderCard([inlineSaving()]);
+    await waitFor(() =>
+      expect(m.patch).toHaveBeenCalledWith('pill-1', 'bytes:abc:12', {
+        status: 'failed',
+        cause: 'unreachable',
+      }),
+    );
+    expect(await screen.findByText("Couldn't reach the file.")).toBeTruthy();
+  });
+
+  it('greys out Try again for a file too large, with the reason in view', () => {
+    renderCard([failedUrl({ cause: 'too-large' })]);
+    const retry = screen.getByRole('button', { name: 'Try again' });
+    expect(retry.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(retry)).toBe('This file is too large to save.');
+    fireEvent.click(retry);
+    expect(m.saveMedia).not.toHaveBeenCalled();
+    // The original can still be opened where it lives.
+    const open = screen.getByRole('button', { name: 'Open original' });
+    expect(open.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('says why Try again is greyed out when the file cannot be fetched again', () => {
+    renderCard([failedUrl()], { personaId: null });
+    const retry = screen.getByRole('button', { name: 'Try again' });
+    expect(retry.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText("This file can't be fetched again.")).toBeTruthy();
+    expect(reasonOf(retry)).toBe("This file can't be fetched again.");
   });
 
   it('marks an expired saving item as failed without fetching', async () => {
@@ -311,6 +415,29 @@ describe('MediaCard', () => {
     // Nothing earlier in this chat to scroll to: greyed out with the reason.
     expect(marker.getAttribute('aria-disabled')).toBe('true');
     expect(marker.getAttribute('title')).toBe('The earlier files are no longer in this chat.');
+    expect(screen.getByText('The earlier files are no longer in this chat.')).toBeTruthy();
+    expect(reasonOf(marker)).toBe('The earlier files are no longer in this chat.');
+  });
+
+  it('finds an earlier card that is still settling', async () => {
+    vi.spyOn(getClientDataDb().artefacts, 'get').mockReturnValue(
+      new Promise(() => undefined) as never,
+    );
+    renderCard([saved(1, 'a1')], { pill: { ...pillWith([saved(1, 'a1')]), id: 'pill-0' } });
+    renderCard([{ ...saved(1, 'a1'), status: 'duplicate' }]);
+    const marker = screen.getByRole('button', { name: 'Same 1 file as above' });
+    await waitFor(() => expect(marker.getAttribute('aria-disabled')).toBeNull());
+    expect(screen.queryByText('The earlier files are no longer in this chat.')).toBeNull();
+  });
+
+  it('finds an earlier card that is still saving', async () => {
+    m.join.mockReturnValue(new Promise(() => undefined));
+    renderCard([inlineSaving({ artefactId: 'a1' })], {
+      pill: { ...pillWith([inlineSaving({ artefactId: 'a1' })]), id: 'pill-0' },
+    });
+    renderCard([{ ...saved(1, 'a1'), status: 'duplicate' }]);
+    const marker = screen.getByRole('button', { name: 'Same 1 file as above' });
+    await waitFor(() => expect(marker.getAttribute('aria-disabled')).toBeNull());
   });
 
   it('enables the duplicate marker once the earlier player is on the page', async () => {
@@ -375,6 +502,14 @@ describe('MediaCard', () => {
     expect(currentFloorOwner()).toBeNull();
   });
 
+  it('shows the provider and the note for a result whose files were all refused', () => {
+    const pill = pillWith([]);
+    pill.payload = { ...(pill.payload as object), mediaRefused: 2 };
+    renderCard([], { pill });
+    expect(screen.getByText('ElevenLabs · creative_generate_in_flow')).toBeTruthy();
+    expect(screen.getByText('2 files not shown: unsupported type')).toBeTruthy();
+  });
+
   it('notes refused files', async () => {
     await seed('a1', 'audio');
     renderCard([{ ...saved(1, 'a1'), refused: 1 }]);
@@ -429,6 +564,20 @@ describe('Pill with media', () => {
     expect(await screen.findByText('ElevenLabs · creative_generate_in_flow')).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Play Audio 1' })).toBeTruthy();
   });
+  it('renders the card under the pill for a refused-only result', async () => {
+    const row = pillWith([]);
+    row.payload = { ...(row.payload as object), mediaRefused: 1 };
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <Pill row={row} chatId="c1" personaId="pe1" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(container.querySelector('.media-card-block')).toBeTruthy();
+    expect(await screen.findByText('1 file not shown: unsupported type')).toBeTruthy();
+  });
+
   it('opens the file itself in the Treasury', async () => {
     await seed('a1', 'audio');
     function Where(): JSX.Element {

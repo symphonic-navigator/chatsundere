@@ -168,6 +168,26 @@ function itemFrom(base: MediaItem, outcome: MediaSaveOutcome | undefined): Media
   return { ...rest, status: outcome.status, artefactId: outcome.artefactId };
 }
 
+/** The stored titles of the artefacts this result's duplicates repeat; a failed lookup is just left out. */
+async function titlesOfEarlier(
+  items: MediaItem[],
+  media: McpMediaContext,
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  const titleOf = media.titleOf;
+  if (!titleOf) return titles;
+  const ids = new Set(
+    items.flatMap((i) => (i.status === 'duplicate' && i.artefactId ? [i.artefactId] : [])),
+  );
+  await Promise.all(
+    [...ids].map(async (id) => {
+      const title = await titleOf(id).catch(() => null);
+      if (title) titles.set(id, title);
+    }),
+  );
+  return titles;
+}
+
 /**
  * Save the audio and video of a successful result and tell the model, in one line, what the
  * user truly sees. A save failure never fails the tool. Signed URLs go only into the pill's
@@ -183,9 +203,13 @@ async function withMedia(
 ): Promise<ToolResult> {
   const { refs, refused } = extractMedia(raw);
   if (refs.length === 0) {
-    return refused > 0
-      ? { ...result, output: `${result.output}\n\n${refusedLine(refused)}` }
-      : result;
+    if (refused === 0) return result;
+    // No item carries the count, so the card reads it from its own field.
+    return {
+      ...result,
+      output: `${result.output}\n\n${refusedLine(refused)}`,
+      meta: { ...(result.meta ?? {}), media: [], mediaRefused: refused },
+    };
   }
   const kindCount = { audio: 0, video: 0 };
   for (const ref of refs) kindCount[ref.kind] += 1;
@@ -242,9 +266,10 @@ async function withMedia(
   if (signal && onAbort) signal.removeEventListener('abort', onAbort);
 
   const items = base.map((item, i) => itemFrom(item, outcomes[i]));
+  const earlierTitles = await titlesOfEarlier(items, media);
   return {
     ...result,
-    output: `${result.output}\n\n${modelLineFor(items)}`,
+    output: `${result.output}\n\n${modelLineFor(items, earlierTitles)}`,
     meta: { ...(result.meta ?? {}), media: items },
   };
 }

@@ -4,15 +4,18 @@ import type { MediaKind } from '../../../mcp/media-extract.js';
 
 const MIB = 1_048_576;
 const files = (n: number): string => `${n} ${n === 1 ? 'file' : 'files'}`;
+/** Small files would sit on "0 of 1 MB" for their whole save, so they get one decimal. */
+const mb = (bytes: number): string => {
+  const value = bytes / MIB;
+  return String(value < 10 ? Number(value.toFixed(1)) : Math.round(value));
+};
 
 /** Every user-facing string of the media card and its players, in one place. */
 export const mediaCopy = {
   saving(kind: MediaKind, progress?: { done: number; total: number | null }): string {
     const noun = kind === 'audio' ? 'audio' : 'video';
     if (progress && progress.total !== null) {
-      const done = Math.round(progress.done / MIB);
-      const total = Math.round(progress.total / MIB);
-      return `Saving ${noun} · ${done} of ${total} MB`;
+      return `Saving ${noun} · ${mb(progress.done)} of ${mb(progress.total)} MB`;
     }
     return `Saving ${noun}…`;
   },
@@ -29,6 +32,7 @@ export const mediaCopy = {
   download: 'Download',
   openInTreasury: 'Open in Treasury',
   linkExpired: 'The link has expired.',
+  cannotFetchAgain: "This file can't be fetched again.",
   fullscreen: 'Fullscreen',
   duplicates: (n: number): string => `Same ${files(n)} as above`,
   duplicatesGone: 'The earlier files are no longer in this chat.',

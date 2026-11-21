@@ -45,6 +45,8 @@ interface PillPayloadShape {
   mcpRedirect?: unknown;
   /** Audio and video an MCP result delivered, with their save state. */
   media?: MediaItem[];
+  /** Unsupported files of a result that offered nothing playable (`media` is then empty). */
+  mediaRefused?: number;
 }
 
 /**
@@ -197,7 +199,9 @@ export function Pill({
   const redirectNotice =
     row.kind === 'tool-call' ? readMcpRedirectNotice(payload?.mcpRedirect) : null;
   const hasMedia =
-    row.kind === 'tool-call' && Array.isArray(payload?.media) && payload.media.length > 0;
+    row.kind === 'tool-call' &&
+    Array.isArray(payload?.media) &&
+    (payload.media.length > 0 || (payload.mediaRefused ?? 0) > 0);
 
   const inline = (
     <span className="pill-wrap">
