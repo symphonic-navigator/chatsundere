@@ -873,3 +873,18 @@ Seven units were built in parallel sessions and merged to `master` on 2026-11-18
 - **Rationale for deferral:** none is a dead end; (2) touches every overlay and is its own design (Chris deferred it as Q3 of the Back spec); (6, first part) was accepted by Chris for 0.5.0 as Q5 of the connector spec.
 - **Follow-up commitment:** rows in [[follow-ups-index]]; (1) is decided by Chris's device test of the search spec's step 7; (2) starts with the quick menu.
 - **Chris sign-off:** not required (soft); (2) and (6) were his decisions at spec time.
+
+## 2026-11-21 — MCP audio/video playback, parked minors
+
+- **Affected flow / surface:** the media card in chat tool pills; the Treasury "Audio & video" tab; transfers (#69).
+- **Finding (Laura's summary and the whole-branch review):**
+  1. A results row whose files were all refused carries the note only in the model text, not on the card (later fixed: `mediaRefused` shows it).
+  2. After a Treasury rename, the chat card keeps the title the model was told, so the two differ.
+  3. An imported chat exported with the "Images, audio & video" switch off shows the tool label with no card body; images show a placeholder.
+  4. Two devices can each save the same file once in a narrow window (device B opens the chat while A's save is past the 45 s wait and not yet synced).
+  5. Treasury size reads 0 for a synced media row whose bytes are not on this device.
+- **Mode:** pre-squash.
+- **Criterion:** least astonishment.
+- **Rationale for deferral:** none is a dead end or a hard defect; (2) is deliberate (the model must keep the names it was told); (4) costs quota, not data.
+- **Follow-up commitment:** (3) a one-line "Not carried over in this transfer"; (4) and (5) with the storage-limits talk; rows in [[follow-ups-index]] if they outlive 0.6.0.
+- **Chris sign-off:** not required (soft).
