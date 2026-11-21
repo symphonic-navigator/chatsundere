@@ -12,6 +12,7 @@ import {
 } from '../../src/boot/client-data-db.js';
 import { addGeneratedArtefact } from '../../src/data/artefacts.js';
 import { Treasury } from '../../src/routes/app/treasury.js';
+import { _resetBlobFetchForTests, _setBlobFetchDeps } from '../../src/sync/blob-fetch.js';
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
@@ -292,11 +293,62 @@ test('the lightbox has one Download for media, and says in words why it is unava
   expect(screen.queryByRole('button', { name: 'More for Theme song' })).not.toBeInTheDocument();
 });
 
+function actions(): HTMLElement {
+  const el = document.querySelector<HTMLElement>('.lightbox-actions');
+  if (!el) throw new Error('no lightbox toolbar');
+  return el;
+}
+
 test('while the bytes are on their way the lightbox says so', async () => {
-  await seedPersona('p1', 'Mei');
-  await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
-  renderOpen();
-  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-  expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
-  expect(screen.getAllByText('Downloading from your vault…').length).toBeGreaterThan(0);
+  _setBlobFetchDeps({
+    getMk: () => ({}) as never,
+    getBlob: () => new Promise<Uint8Array>(() => {}),
+  });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(within(actions()).getByText('Downloading from your vault…')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+  } finally {
+    _resetBlobFetchForTests();
+  }
+});
+
+test('after a failed fetch the lightbox says the file could not be reached', async () => {
+  // No key material: the fetch fails retriably, as when the vault cannot be reached.
+  _setBlobFetchDeps({ getMk: () => null });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(within(actions()).getByText("Couldn't reach the file.")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+  } finally {
+    _resetBlobFetchForTests();
+  }
+});
+
+test('the lightbox Download enables once the vault fetch lands', async () => {
+  _setBlobFetchDeps({
+    getMk: () => ({}) as never,
+    getBlob: async () => new Uint8Array([1, 2, 3]),
+    openBlob: async (_mk, _id, body) => body,
+    invalidate: () => {},
+  });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Download' })).not.toBeDisabled(),
+    );
+    expect(document.querySelector('.lightbox-btn-reason')).toBeNull();
+  } finally {
+    _resetBlobFetchForTests();
+  }
 });

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { ArtefactRow } from '../../boot/client-data-db.js';
 import { triggerDownload } from '../../lib/download.js';
 import { prefersReducedMotion } from '../../lib/reduced-motion.js';
+import { useBlobBytes } from '../../sync/blob-fetch.js';
 import { TagEditor } from '../artefact/TagEditor.js';
 import { BlobImage } from '../blob/BlobImage.js';
 import { CopyButton } from '../chat/markdown/CopyButton.js';
@@ -166,18 +168,6 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
     item.kind === 'text' ? (override ?? detectFormat(item.fileName, item.mime)) : 'plain';
 
   const editable = item.kind === 'text' && item.caps.editSource;
-  // An empty Blob counts as missing, as in the player.
-  const mediaBytes =
-    item.kind === 'media' && item.artefact?.blob && item.artefact.blob.size > 0
-      ? item.artefact.blob
-      : null;
-  // Without a vault ref, or past the oversize sentinel, no fetch will ever bring the bytes.
-  const mediaUnavailable =
-    item.kind !== 'media' || mediaBytes
-      ? null
-      : item.artefact?.blobOversized === true || !item.artefact?.blobRef
-        ? mediaCopy.deviceOnly
-        : mediaCopy.downloading;
   const dirty = editable && draft !== baseline;
 
   // Run an action immediately, or — if there are unsaved edits — defer it behind
@@ -390,33 +380,22 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
                 {copied ? 'Copied' : 'Copy'}
               </button>
             )}
-            {item.caps.download && (
+            {item.caps.download && item.kind === 'media' && item.artefact ? (
+              <MediaDownload key={item.id} artefact={item.artefact} fileName={item.fileName} />
+            ) : item.caps.download ? (
               <button
                 type="button"
                 className="lightbox-btn"
-                // A media file whose bytes are not here cannot be saved yet; the reason
-                // is shown as text beside the button (a title never shows on touch).
-                disabled={mediaUnavailable !== null}
-                aria-describedby={
-                  mediaUnavailable !== null ? 'lightbox-download-reason' : undefined
-                }
                 onClick={() => {
-                  // Image and media items carry their bytes outside the text
-                  // draft, which would download an empty file for them.
+                  // Image items carry their bytes behind imageUrl; the text
+                  // draft would download an empty file for them.
                   if (item.kind === 'image' && item.imageUrl)
                     downloadUrl(item.imageUrl, item.fileName);
-                  else if (item.kind === 'media') {
-                    if (mediaBytes) triggerDownload(mediaBytes, item.fileName);
-                  } else downloadText(draft, formatToExtension(item.fileName, format));
+                  else downloadText(draft, formatToExtension(item.fileName, format));
                 }}
               >
                 Download
               </button>
-            )}
-            {item.caps.download && mediaUnavailable !== null ? (
-              <span id="lightbox-download-reason" className="lightbox-btn-reason">
-                {mediaUnavailable}
-              </span>
             ) : null}
             {item.caps.delete && p.onDelete ? (
               <button
@@ -530,5 +509,52 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
       </div>
     </dialog>,
     document.body,
+  );
+}
+
+/**
+ * Download for an audio or video artefact. It shares the player's vault fetch
+ * (fetches are deduped by row and field), so it enables as soon as the bytes
+ * land, and says in words, not a title, why it cannot yet: still on its way,
+ * unreachable, or never leaving the device that saved it.
+ */
+function MediaDownload({
+  artefact,
+  fileName,
+}: {
+  artefact: ArtefactRow;
+  fileName: string;
+}): JSX.Element {
+  const fetched = useBlobBytes('artefacts', artefact.id, 'blob');
+  // An empty Blob counts as missing, as in the player.
+  const local = artefact.blob && artefact.blob.size > 0 ? artefact.blob : null;
+  const bytes = local ?? (fetched.state === 'ready' ? (fetched.bytes ?? null) : null);
+  const reason =
+    bytes !== null
+      ? null
+      : fetched.state === 'terminal'
+        ? mediaCopy.deviceOnly
+        : fetched.retry
+          ? mediaCopy.failed.unreachable
+          : mediaCopy.downloading;
+  return (
+    <>
+      <button
+        type="button"
+        className="lightbox-btn"
+        disabled={reason !== null}
+        aria-describedby={reason !== null ? 'lightbox-download-reason' : undefined}
+        onClick={() => {
+          if (bytes) triggerDownload(bytes, fileName);
+        }}
+      >
+        Download
+      </button>
+      {reason !== null ? (
+        <span id="lightbox-download-reason" className="lightbox-btn-reason">
+          {reason}
+        </span>
+      ) : null}
+    </>
   );
 }

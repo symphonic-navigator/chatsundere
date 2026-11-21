@@ -20,7 +20,11 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
-import { exportPersona, exportPersonaWithReport } from '../../src/data/chatsundere-export.js';
+import {
+  EXPORT_FETCH_TIMEOUT_MS,
+  exportPersona,
+  exportPersonaWithReport,
+} from '../../src/data/chatsundere-export.js';
 import { importPersonaPack } from '../../src/data/chatsundere-import.js';
 import {
   readPersonaPack,
@@ -648,6 +652,29 @@ describe('persona export — files whose bytes live only in the vault', () => {
       expect(r.blobRef).toBeUndefined();
       expect(r.thumbBlobRef).toBeUndefined();
       expect(r.blobOversized).toBeUndefined();
+    }
+  });
+
+  it('gives up on a vault file that never arrives and counts it as missing', async () => {
+    _setBlobFetchDeps({ getBlob: () => new Promise<Uint8Array>(() => {}) });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let settled: { missingFiles: number } | undefined;
+      const run = exportPersonaWithReport('p-v', {
+        memory: false,
+        artefacts: true,
+        images: true,
+      }).then((r) => {
+        settled = r;
+      });
+      for (let i = 0; i < 10 && settled === undefined; i++) {
+        await vi.advanceTimersByTimeAsync(EXPORT_FETCH_TIMEOUT_MS);
+      }
+      await run;
+      // The stalled one and the oversized one.
+      expect(settled?.missingFiles).toBe(2);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

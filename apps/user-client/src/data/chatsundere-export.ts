@@ -38,6 +38,9 @@ async function maybeEncrypt(
   return wrapEncrypted(container, meta);
 }
 
+/** How long an export waits for one file from the vault before leaving it out. */
+export const EXPORT_FETCH_TIMEOUT_MS = 20_000;
+
 /**
  * The bytes of a row's blob field: the local copy, else fetched from the vault
  * (which also hydrates the row). `null` when they cannot be had on this device:
@@ -51,8 +54,19 @@ async function localOrFetched(
   const state = await resolveBlobBytes(collection, key, field);
   if (state.kind === 'ready') return state.bytes;
   if (state.kind === 'terminal') return null;
-  const fetched = await fetchRowBlob(collection, key, field, state.ref);
-  return fetched.state === 'ready' && fetched.bytes ? fetched.bytes : null;
+  // The transport takes no AbortSignal, so a stalled connection is raced, not
+  // cancelled: the export moves on and counts the file as missing, while the fetch
+  // may still finish onto the row in the background.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), EXPORT_FETCH_TIMEOUT_MS);
+  });
+  try {
+    const fetched = await Promise.race([fetchRowBlob(collection, key, field, state.ref), timedOut]);
+    return fetched?.state === 'ready' && fetched.bytes ? fetched.bytes : null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** The notice for files an export had to leave out because their bytes are not here. */
