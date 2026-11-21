@@ -156,3 +156,11 @@ Media artefacts must not land on surfaces that cannot show them (Laura, hard).
 - Second device: the media show "Downloading from your vault", then play; a video over 32 MiB shows "Lives only on the device that saved it".
 - Read-aloud running, start a player: read-aloud pauses and stays paused after the clip. Live voice: a turn pauses the player.
 - Treasury: "Audio & video" tab plays; lightbox plays; the picker shows media greyed out with the reason.
+
+## Amendments after the build (2026-11-21)
+
+- **"Open original"** is offered only on the "Couldn't save" row. Once a file is saved its signed link is dropped (§5), and the saved bytes make the original unnecessary.
+- **Treasury rows** open the shared player in the lightbox, like every other Treasury type, instead of being players themselves.
+- **Titles in the chat** stay the ones the model was told ("Audio 2"), so "take number 2" keeps meaning the same file to both; a rename in the Treasury changes the Treasury title only.
+- **Transfers:** audio and video follow the export's images switch, now called "Images, audio & video".
+- **Pending links** live in the tool pill's payload (sealed and synced like every record), not on the artefact row: an artefact exists only once its bytes do.

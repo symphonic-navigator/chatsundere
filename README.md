@@ -120,6 +120,10 @@ rejects anything shorter than 40 characters.
 
 The local dev values for both overrides are committed in `apps/user-client/.env.development`: discovery advertises https URLs, while the dev services listen on plain http.
 
+## Audio and video from MCP connectors
+
+Since 0.6.0, when an MCP tool returns audio or video (as content blocks, `resource_link`s, or HTTPS links inside its JSON, as ElevenLabs and Higgsfield do), the client saves the file as an artefact right away and shows it as a native player in the chat: play/pause, current and total time, a thumb-sized seek bar, and inline video with a poster. Only one sound plays at a time, read-aloud and live voice included. Saved files appear under **Audio & video** in the Treasury and travel in transfers. Provider HTML views (MCP Apps) are not rendered; see [ADR 0043](obsidian/decisions/0043-native-players-for-mcp-media.md).
+
 ## Curating model & provider support
 
 Model and provider support in `packages/llm-unified` is curated by maintainers

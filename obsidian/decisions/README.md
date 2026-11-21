@@ -60,3 +60,4 @@ For small, contained decisions (a variable name, a layout choice), a code commen
 - [0040](0040-filter-juvenile-voices.md) — Juvenile voices are filtered out, openly
 - [0041](0041-no-maintenance-branch-for-0.5.md) — No maintenance branch for 0.5; Eidolon builds on its own branch (superseded by 0042)
 - [0042](0042-release-0.6-from-master-before-eidolon.md) — 0.6.0 is released from `master` before Eidolon; `maintenance/0.5` after all
+- [0043](0043-native-players-for-mcp-media.md) — Native players for MCP media, not MCP Apps
