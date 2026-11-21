@@ -177,6 +177,46 @@ describe('extractMedia: refusals', () => {
   });
 });
 
+describe('extractMedia: refusal precision', () => {
+  it('neither plays nor counts non-media mimes', () => {
+    const { refs, refused } = extractMedia({
+      content: [{ type: 'resource_link', uri: 'https://x.example/a.png', mimeType: 'image/png' }],
+      structuredContent: { url: 'https://x.example/a.png', mime_type: 'image/png' },
+    });
+    expect(refs).toHaveLength(0);
+    expect(refused).toBe(0);
+  });
+
+  it('applies a sibling mime only to the main URL field, not a thumbnail', () => {
+    const { refs } = extractMedia({
+      structuredContent: {
+        url: 'https://x.example/a.mp4',
+        thumbnail: 'https://x.example/a.jpg',
+        mime_type: 'video/mp4',
+      },
+    });
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.source).toEqual({ kind: 'url', url: 'https://x.example/a.mp4' });
+  });
+
+  it('counts the same refused offer once across text and structuredContent', () => {
+    const json = { url: 'https://x.example/pic.svg' };
+    const { refused } = extractMedia({
+      content: [{ type: 'text', text: JSON.stringify(json) }],
+      structuredContent: json,
+    });
+    expect(refused).toBe(1);
+  });
+
+  it('refuses a bytes block with a disallowed audio mime', () => {
+    const { refs, refused } = extractMedia({
+      content: [{ type: 'audio', data: 'SUQz', mimeType: 'audio/midi' }],
+    });
+    expect(refs).toHaveLength(0);
+    expect(refused).toBe(1);
+  });
+});
+
 describe('isGenericFileName', () => {
   it('flags generic names', () => {
     expect(isGenericFileName('content.mp3')).toBe(true);

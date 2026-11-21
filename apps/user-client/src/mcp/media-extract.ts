@@ -117,7 +117,12 @@ function kindOf(mime: string): MediaKind {
   return mime.startsWith('video/') ? 'video' : 'audio';
 }
 
-type Outcome = { ref: MediaRef } | { refused: true } | null;
+type Outcome = { ref: MediaRef } | { refused: string } | null;
+
+/** A hint is refusable (rather than merely not media) when it claims audio/video or is SVG, the one image type that can carry script. */
+function isRefusableMime(mime: string): boolean {
+  return mime.startsWith('audio/') || mime.startsWith('video/') || mime === 'image/svg+xml';
+}
 
 function urlOutcome(
   url: URL,
@@ -127,9 +132,11 @@ function urlOutcome(
 ): Outcome {
   const ext = extensionOf(url);
   if (mimeHint !== null) {
-    if (!ALLOWED_MIMES.has(mimeHint)) return { refused: true };
+    if (!ALLOWED_MIMES.has(mimeHint)) {
+      return isRefusableMime(mimeHint) ? { refused: key } : null;
+    }
   } else if (ext === 'svg') {
-    return { refused: true };
+    return { refused: key };
   }
   const mime = mimeHint ?? (ext !== null ? (MIME_BY_EXTENSION[ext] ?? null) : null);
   if (mime === null) return null;
@@ -149,7 +156,9 @@ function bytesOutcome(base64: unknown, mimeRaw: unknown): Outcome {
   const mime = normaliseMime(mimeRaw);
   if (typeof base64 !== 'string' || base64 === '' || mime === null) return null;
   if (!ALLOWED_MIMES.has(mime)) {
-    return mime.startsWith('audio/') || mime.startsWith('video/') ? { refused: true } : null;
+    return isRefusableMime(mime)
+      ? { refused: `bytes:${hashOf(base64.slice(0, 64))}:${base64.length}` }
+      : null;
   }
   return {
     ref: {
@@ -165,19 +174,23 @@ function bytesOutcome(base64: unknown, mimeRaw: unknown): Outcome {
 
 class Collector {
   readonly refs: MediaRef[] = [];
-  refused = 0;
+  private readonly refusedKeys = new Set<string>();
   private readonly seen = new Set<string>();
   private nodes = 0;
 
   add(outcome: Outcome): void {
     if (outcome === null) return;
     if ('refused' in outcome) {
-      this.refused++;
+      this.refusedKeys.add(outcome.refused);
       return;
     }
     if (this.seen.has(outcome.ref.key)) return;
     this.seen.add(outcome.ref.key);
     this.refs.push(outcome.ref);
+  }
+
+  get refused(): number {
+    return this.refusedKeys.size;
   }
 
   walk(value: unknown, depth: number): void {
@@ -213,7 +226,12 @@ class Collector {
       generationId !== null ? `gen:${generationId}` : `url:${url.origin}${url.pathname}`;
 
     if (!grouped) {
-      for (const [, url] of candidates) this.add(urlOutcome(url, mimeHint, keyFor(url), null));
+      // A sibling mime describes the media URL, not e.g. a thumbnail beside it.
+      const single = candidates.length === 1;
+      for (const [field, url] of candidates) {
+        const hint = single || PREFERRED_URL_FIELDS.includes(field) ? mimeHint : null;
+        this.add(urlOutcome(url, hint, keyFor(url), null));
+      }
       return;
     }
     const rank = (field: string): number => {
@@ -221,16 +239,16 @@ class Collector {
       return i === -1 ? PREFERRED_URL_FIELDS.length : i;
     };
     const ordered = [...candidates].sort((a, b) => rank(a[0]) - rank(b[0]));
-    let refusedHere = false;
+    let refusedKey: string | null = null;
     for (const [, url] of ordered) {
       const outcome = urlOutcome(url, mimeHint, keyFor(url), null);
       if (outcome !== null && 'ref' in outcome) {
         this.add(outcome);
         return;
       }
-      if (outcome !== null) refusedHere = true;
+      if (outcome !== null) refusedKey ??= outcome.refused;
     }
-    if (refusedHere) this.refused++;
+    if (refusedKey !== null) this.refusedKeys.add(refusedKey);
   }
 }
 
