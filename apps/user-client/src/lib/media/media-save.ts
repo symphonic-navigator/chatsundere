@@ -9,7 +9,8 @@ import { sniffAgrees, sniffMediaMime } from './media-sniff.js';
 export type MediaFailCause = 'expired' | 'unreachable' | 'wrong-type' | 'too-large';
 export type MediaSaveOutcome =
   | { status: 'saved'; artefactId: string }
-  | { status: 'duplicate'; artefactId: string }
+  /** `joined`: the file came from a save another result started, not from this one's. */
+  | { status: 'duplicate'; artefactId: string; joined?: true }
   | { status: 'failed'; cause: MediaFailCause };
 
 export interface MediaSaveContext {
@@ -18,6 +19,8 @@ export interface MediaSaveContext {
   serverName: string;
   toolName: string;
   title: string;
+  /** The tool result the save is for; another result joining it is told `duplicate`. */
+  owner?: string;
 }
 
 /** Fetched bodies and decoded base64 are always ArrayBuffer-backed, never shared memory. */
@@ -41,7 +44,7 @@ export function isExpired(ref: Pick<MediaRef, 'expiresAt'>, now: number = Date.n
   return ref.expiresAt !== null && ref.expiresAt <= now;
 }
 
-const inFlight = new Map<string, Promise<MediaSaveOutcome>>();
+const inFlight = new Map<string, { promise: Promise<MediaSaveOutcome>; owner?: string }>();
 
 /** The in-flight and `useMediaProgress` key of one save: per chat, so two chats never join. */
 export function progressKey(chatId: string, key: string): string {
@@ -49,11 +52,36 @@ export function progressKey(chatId: string, key: string): string {
 }
 
 /**
+ * Join a running save as `owner`. The file a save for another result brings in is that
+ * result's to show, so it reaches this one as a duplicate, never as a second player.
+ * An unknown owner on either side (pills from before owners) joins as before.
+ */
+function join(
+  running: { promise: Promise<MediaSaveOutcome>; owner?: string },
+  owner: string | undefined,
+): Promise<MediaSaveOutcome> {
+  if (owner === undefined || running.owner === undefined || owner === running.owner) {
+    return running.promise;
+  }
+  return running.promise.then(
+    (outcome): MediaSaveOutcome =>
+      outcome.status === 'saved'
+        ? { status: 'duplicate', artefactId: outcome.artefactId, joined: true }
+        : outcome,
+  );
+}
+
+/**
  * The save of `key` still running in this chat, to join without starting one; null when
  * none is. Inline bytes cannot be fetched again, so a card can only wait on the tool's save.
  */
-export function awaitInFlightSave(chatId: string, key: string): Promise<MediaSaveOutcome> | null {
-  return inFlight.get(progressKey(chatId, key)) ?? null;
+export function awaitInFlightSave(
+  chatId: string,
+  key: string,
+  owner?: string,
+): Promise<MediaSaveOutcome> | null {
+  const running = inFlight.get(progressKey(chatId, key));
+  return running ? join(running, owner) : null;
 }
 
 /** Single-flight per chat and `ref.key`: a second call while one runs joins it. */
@@ -64,12 +92,12 @@ export function saveMedia(
 ): Promise<MediaSaveOutcome> {
   const pkey = progressKey(ctx.chatId, ref.key);
   const running = inFlight.get(pkey);
-  if (running) return running;
+  if (running) return join(running, ctx.owner);
   const promise = runSave(ref, ctx, pkey, signal).finally(() => {
     inFlight.delete(pkey);
     useMediaProgress.getState().clear(pkey);
   });
-  inFlight.set(pkey, promise);
+  inFlight.set(pkey, ctx.owner !== undefined ? { promise, owner: ctx.owner } : { promise });
   return promise;
 }
 

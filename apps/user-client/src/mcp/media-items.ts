@@ -16,6 +16,8 @@ export interface MediaItem {
   source?: { url: string; expiresAt: number | null };
   /** On the first item only: unsupported files that were not shown. */
   refused?: number;
+  /** The tool result the item's save belongs to, shared by the items of one result. */
+  owner?: string;
 }
 
 /** What the MCP tools need to save media from a result: the chat it lands in and the save service. */
@@ -27,14 +29,32 @@ export interface McpMediaContext {
   titleOf?: (artefactId: string) => Promise<string | null>;
 }
 
+/**
+ * A pill payload with no media `source` left: a transfer pack must not carry signed links
+ * out (they are bearer tokens), nor bring links in that a card would then fetch on its own.
+ */
+export function withoutMediaSources(payload: unknown): unknown {
+  if (payload === null || typeof payload !== 'object') return payload;
+  const media = (payload as { media?: unknown }).media;
+  if (!Array.isArray(media)) return payload;
+  return {
+    ...payload,
+    media: media.map((item: unknown) => {
+      if (item === null || typeof item !== 'object') return item;
+      const { source: _source, ...rest } = item as Record<string, unknown>;
+      return rest;
+    }),
+  };
+}
+
 const KIND_LABEL: Record<MediaKind, string> = { audio: 'Audio', video: 'Video' };
 
 /**
  * The title a file is shown and named by: the provider's own name when it chose one, else
  * "Audio <index>" (1-based within its kind). A lone file is numbered too, so "Audio 1" reads
- * the same to the user and the model; `kindCount` is the number of files of that kind.
+ * the same to the user and the model.
  */
-export function titleFor(ref: MediaRef, index: number, _kindCount: number): string {
+export function titleFor(ref: MediaRef, index: number): string {
   const name = ref.providerName?.trim() ?? '';
   if (name !== '' && !isGenericFileName(name)) return name;
   return `${KIND_LABEL[ref.kind]} ${index}`;
@@ -61,7 +81,7 @@ export function refusedLine(refused: number): string {
 }
 
 /**
- * The one line appended to the tool output that tells the model what the user truly sees,
+ * The one line put before the tool output that tells the model what the user truly sees,
  * with the names to use for each file. Never carries a URL. `earlierTitles` maps the
  * artefact a duplicate repeats to its title, where the tool could look it up.
  */

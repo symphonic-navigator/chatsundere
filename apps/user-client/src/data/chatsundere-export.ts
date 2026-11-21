@@ -23,6 +23,7 @@ import {
   writePersonaPack,
 } from '../lib/chatsundere-transfer/persona-pack.js';
 import { APP_VERSION } from '../lib/version.js';
+import { withoutMediaSources } from '../mcp/media-items.js';
 import { fetchRowBlob, resolveBlobBytes } from '../sync/blob-fetch.js';
 
 /** Encrypt a plaintext pack Blob under `password` when one is given; otherwise return it unchanged. */
@@ -168,9 +169,10 @@ export async function exportPersonaWithReport(
   // --- Messages & pills ---
   const messages = chatIds.length ? await db.messages.where('chatId').anyOf(chatIds).toArray() : [];
   const messageIds = messages.map((m) => m.id);
-  const pills = messageIds.length
-    ? await db.pills.where('messageId').anyOf(messageIds).toArray()
-    : [];
+  // Media sources are signed links, bearer tokens for whoever holds the pack.
+  const pills = (
+    messageIds.length ? await db.pills.where('messageId').anyOf(messageIds).toArray() : []
+  ).map((p) => ({ ...p, payload: withoutMediaSources(p.payload) }));
 
   // --- Attachments (honour `images` switch; skip deleted) ---
   const rawAttachments = chatIds.length

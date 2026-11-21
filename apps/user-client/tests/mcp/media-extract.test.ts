@@ -28,6 +28,18 @@ describe('extractMedia: content blocks', () => {
     expect(refs[0]?.key.startsWith('bytes:')).toBe(true);
   });
 
+  it('keys inline bytes by the whole payload, not its head', () => {
+    const head = 'SUQz'.repeat(64);
+    const keyOf = (data: string): string | undefined =>
+      extractMedia({ content: [{ type: 'audio', data, mimeType: 'audio/mpeg' }] }).refs[0]?.key;
+    const a = keyOf(`${head}AAAA`);
+    const b = keyOf(`${head}AAAB`);
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    expect(a).not.toBe(b);
+    expect(keyOf(`${head}AAAA`)).toBe(a);
+  });
+
   it('turns an embedded video resource blob into a bytes ref', () => {
     const { refs } = extractMedia({
       content: [{ type: 'resource', resource: { uri: 'x', mimeType: 'video/mp4', blob: 'AAAA' } }],

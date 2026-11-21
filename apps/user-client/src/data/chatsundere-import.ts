@@ -30,6 +30,7 @@ import {
 } from '../lib/chatsundere-transfer/persona-pack.js';
 import { resolveVectorStrategy } from '../lib/chatsundere-transfer/vector-strategy.js';
 import { isAllowedMediaMime } from '../mcp/media-extract.js';
+import { withoutMediaSources } from '../mcp/media-items.js';
 import { enqueueSync, isLinkedForSync } from '../sync/enqueue.js';
 import { scheduleClass1Sync } from '../sync/triggers.js';
 
@@ -225,13 +226,28 @@ export async function importPersonaPack(
   }
 
   // ── Remap and write pills ─────────────────────────────────────────────────
-  const pillRows: PillRow[] = payload.pills.map((pill) => ({
-    ...pill,
-    id: remap.fresh(pill.id),
-    messageId: remap.map(pill.messageId) ?? pill.messageId,
-    // Remap artefact id references inside the payload (I1 fix).
-    payload: remapPillArtefactRefs(pill.payload, remap),
-  }));
+  // A media save still running in the source can never finish here: settle it from the
+  // pack's own artefact of that key in that chat, as the card would, else fail it.
+  const chatOfMessage = new Map(payload.messages.map((m) => [m.id, m.chatId]));
+  const mediaByKey = new Map<string, string>();
+  for (const art of payload.artefacts) {
+    const key = art.mediaMeta?.key;
+    if (key) mediaByKey.set(`${art.chatId}\u0000${key}`, remap.map(art.id) ?? art.id);
+  }
+  const pillRows: PillRow[] = payload.pills.map((pill) => {
+    const chatId = chatOfMessage.get(pill.messageId);
+    return {
+      ...pill,
+      id: remap.fresh(pill.id),
+      messageId: remap.map(pill.messageId) ?? pill.messageId,
+      // Remap artefact id references inside the payload (I1 fix). A pack is untrusted
+      // input: its media links are dropped, so nothing here fetches what the pack names.
+      payload: settleImportedSaves(
+        withoutMediaSources(remapPillArtefactRefs(pill.payload, remap)),
+        (key) => (chatId === undefined ? undefined : mediaByKey.get(`${chatId}\u0000${key}`)),
+      ),
+    };
+  });
   if (pillRows.length > 0) {
     await db.transaction('rw', [db.pills, db.syncOutbox], async (tx) => {
       await db.pills.bulkAdd(pillRows);
@@ -482,6 +498,28 @@ function remapPillArtefactRefs(raw: unknown, remap: IdRemap): unknown {
     });
   }
   return next;
+}
+
+/**
+ * Turn every `saving` media item into `saved` (when `savedAs` finds the imported file of
+ * its key) or `failed`: without its source and the run that saved it, it would never move.
+ */
+function settleImportedSaves(raw: unknown, savedAs: (key: string) => string | undefined): unknown {
+  if (raw === null || typeof raw !== 'object') return raw;
+  const media = (raw as { media?: unknown }).media;
+  if (!Array.isArray(media)) return raw;
+  return {
+    ...raw,
+    media: media.map((item: unknown) => {
+      if (item === null || typeof item !== 'object') return item;
+      const it = item as { status?: unknown; key?: unknown };
+      if (it.status !== 'saving') return item;
+      const artefactId = typeof it.key === 'string' ? savedAs(it.key) : undefined;
+      return artefactId !== undefined
+        ? { ...item, status: 'saved', artefactId }
+        : { ...item, status: 'failed', cause: 'unreachable' };
+    }),
+  };
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────

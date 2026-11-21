@@ -191,7 +191,8 @@ async function titlesOfEarlier(
 /**
  * Save the audio and video of a successful result and tell the model, in one line, what the
  * user truly sees. A save failure never fails the tool. Signed URLs go only into the pill's
- * media items, never into the output.
+ * media items, never into the output. The line leads the output because a replayed result
+ * keeps only its head, and the names in it are what later turns refer to.
  */
 async function withMedia(
   result: ToolResult,
@@ -207,25 +208,26 @@ async function withMedia(
     // No item carries the count, so the card reads it from its own field.
     return {
       ...result,
-      output: `${result.output}\n\n${refusedLine(refused)}`,
+      output: `${refusedLine(refused)}\n\n${result.output}`,
       meta: { ...(result.meta ?? {}), media: [], mediaRefused: refused },
     };
   }
-  const kindCount = { audio: 0, video: 0 };
-  for (const ref of refs) kindCount[ref.kind] += 1;
   const seen = { audio: 0, video: 0 };
+  // Lets a save this result joins, started for another result, come back as a duplicate.
+  const owner = crypto.randomUUID();
   const base: MediaItem[] = refs.map((ref, i) => {
     seen[ref.kind] += 1;
     return {
       key: ref.key,
       kind: ref.kind,
       mime: ref.mime,
-      title: titleFor(ref, seen[ref.kind], kindCount[ref.kind]),
+      title: titleFor(ref, seen[ref.kind]),
       status: 'saving',
       ...(ref.source.kind === 'url'
         ? { source: { url: ref.source.url, expiresAt: ref.expiresAt } }
         : {}),
       ...(i === 0 && refused > 0 ? { refused } : {}),
+      owner,
     };
   });
 
@@ -239,6 +241,7 @@ async function withMedia(
         serverName,
         toolName,
         title: base[i]?.title ?? '',
+        owner,
       })
       .catch((): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }))
       .then((outcome) => {
@@ -269,7 +272,7 @@ async function withMedia(
   const earlierTitles = await titlesOfEarlier(items, media);
   return {
     ...result,
-    output: `${result.output}\n\n${modelLineFor(items, earlierTitles)}`,
+    output: `${modelLineFor(items, earlierTitles)}\n\n${result.output}`,
     meta: { ...(result.meta ?? {}), media: items },
   };
 }

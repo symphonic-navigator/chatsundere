@@ -297,6 +297,32 @@ describe('MediaCard', () => {
     expect(m.saveMedia).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the marker, not a second player, for a save another result started', async () => {
+    m.saveMedia.mockResolvedValue({ status: 'duplicate', artefactId: 'a5', joined: true });
+    renderCard([
+      {
+        key: 'gen:g1',
+        kind: 'video',
+        mime: 'video/mp4',
+        title: 'Video 1',
+        status: 'saving',
+        source: { url: 'https://cdn.example/v.mp4', expiresAt: FUTURE },
+        owner: 'result-b',
+      },
+    ]);
+    await waitFor(() =>
+      expect(m.patch).toHaveBeenCalledWith('pill-1', 'gen:g1', {
+        status: 'duplicate',
+        artefactId: 'a5',
+      }),
+    );
+    expect(m.saveMedia).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ owner: 'result-b' }),
+    );
+    expect(await screen.findByRole('button', { name: 'Same 1 file as above' })).toBeTruthy();
+  });
+
   it('joins a save of inline bytes still in flight and settles it from its outcome', async () => {
     let finish: (o: unknown) => void = () => undefined;
     m.join.mockReturnValue(
@@ -306,7 +332,7 @@ describe('MediaCard', () => {
     );
     renderCard([inlineSaving()]);
     expect(screen.getByText('Saving audio…')).toBeTruthy();
-    await waitFor(() => expect(m.join).toHaveBeenCalledWith('c1', 'bytes:abc:12'));
+    await waitFor(() => expect(m.join).toHaveBeenCalledWith('c1', 'bytes:abc:12', undefined));
     finish({ status: 'duplicate', artefactId: 'a7' });
     await waitFor(() =>
       expect(m.patch).toHaveBeenCalledWith('pill-1', 'bytes:abc:12', {
@@ -489,7 +515,7 @@ describe('MediaCard', () => {
     for (const stop of [fireEvent.pause, fireEvent.ended, fireEvent.emptied, fireEvent.abort]) {
       fireEvent.click(play);
       fireEvent.play(el);
-      expect(currentFloorOwner()).toBe('player:a1');
+      expect(currentFloorOwner()).toMatch(/^player:a1:/);
       stop(el);
       expect(currentFloorOwner()).toBeNull();
       expect(screen.getByRole('button', { name: 'Play Audio 1' })).toBeTruthy();
@@ -497,9 +523,38 @@ describe('MediaCard', () => {
 
     fireEvent.click(play);
     fireEvent.play(el);
-    expect(currentFloorOwner()).toBe('player:a1');
+    expect(currentFloorOwner()).toMatch(/^player:a1:/);
     unmount();
     expect(currentFloorOwner()).toBeNull();
+  });
+
+  it('keeps one player of an artefact on the floor when another of it unmounts', async () => {
+    await seed('a1', 'audio');
+    renderCard([saved(1, 'a1')]);
+    const second = renderCard([saved(1, 'a1')]);
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Play Audio 1' })).toHaveLength(2),
+    );
+    const [el1, el2] = [
+      ...document.querySelectorAll<HTMLAudioElement>('[data-media-element="a1"]'),
+    ];
+    if (!el1 || !el2) throw new Error('no elements');
+    await waitFor(() => {
+      expect(el1.getAttribute('src')).toBeTruthy();
+      expect(el2.getAttribute('src')).toBeTruthy();
+    });
+    const [play1, play2] = screen.getAllByRole('button', { name: 'Play Audio 1' });
+    if (!play1 || !play2) throw new Error('no buttons');
+    fireEvent.click(play2);
+    fireEvent.play(el2);
+    fireEvent.click(play1);
+    fireEvent.play(el1);
+    // The other instance of the same artefact is paused, not left playing beside it.
+    expect(paused).toContain(el2);
+    const first = currentFloorOwner();
+    expect(first).toMatch(/^player:a1:/);
+    second.unmount();
+    expect(currentFloorOwner()).toBe(first);
   });
 
   it('shows the provider and the note for a result whose files were all refused', () => {

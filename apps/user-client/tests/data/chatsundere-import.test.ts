@@ -523,6 +523,71 @@ describe('persona export → import round-trip — audio and video artefacts', (
     expect(media.map((m) => m.artefactId)).toEqual([audio?.id, video?.id]);
   });
 
+  it('carries no media link out, and brings none in, settling saves that cannot finish', async () => {
+    const db = getClientDataDb();
+    const signed = 'https://cdn.example/a.mp3?X-Amz-Signature=secret';
+    const source = { url: signed, expiresAt: Date.now() + 3_600_000 };
+    const pill = await db.pills.get('pill-media');
+    await db.pills.put({
+      ...(pill as PillRow),
+      payload: {
+        ...(pill?.payload as object),
+        media: [
+          {
+            key: 'gen:a',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 1',
+            status: 'saving',
+            source,
+          },
+          {
+            key: 'gen:x',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 2',
+            status: 'saving',
+            source,
+          },
+          {
+            key: 'gen:y',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 3',
+            status: 'failed',
+            cause: 'unreachable',
+            source,
+          },
+        ],
+      },
+    });
+
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: true });
+    const pack = await readPersonaPack(blob);
+    expect(JSON.stringify(pack.payload.pills)).not.toContain(signed);
+
+    // A pack written before the export stripped them, or by someone else, still carries links.
+    for (const p of pack.payload.pills) {
+      const media = (p.payload as { media?: Record<string, unknown>[] }).media ?? [];
+      for (const item of media) item.source = source;
+    }
+    const res = await importPersonaPack(await writePersonaPack(pack.payload), 'Media (copy)');
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const chatId = chats[0]?.id ?? '';
+    const audio = (await db.artefacts.where('chatId').equals(chatId).toArray()).find(
+      (r) => r.kind === 'audio',
+    );
+    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    const block = msgs[0]?.contentBlocks.find((b) => b.type === 'pill');
+    const imported = await db.pills.get(block && block.type === 'pill' ? block.pillId : '');
+    const media = (imported?.payload as { media: Record<string, unknown>[] }).media;
+    expect(JSON.stringify(media)).not.toContain(signed);
+    for (const item of media) expect(item.source).toBeUndefined();
+    expect(media[0]).toMatchObject({ status: 'saved', artefactId: audio?.id });
+    expect(media[1]).toMatchObject({ status: 'failed', cause: 'unreachable' });
+    expect(media[2]).toMatchObject({ status: 'failed', cause: 'unreachable' });
+  });
+
   it('leaves audio and video behind with the images when images are off', async () => {
     const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: false });
     const res = await importPersonaPack(blob, 'Media (copy)');

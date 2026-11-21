@@ -12,6 +12,7 @@ import { addMediaArtefact } from '../../../src/data/media-artefacts.js';
 import {
   type MediaSaveContext,
   _setMediaProbeForTests,
+  awaitInFlightSave,
   isExpired,
   progressKey,
   saveMedia,
@@ -220,6 +221,31 @@ describe('saveMedia', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     // Settled: a later call starts afresh (and now finds the duplicate).
     expect(saveMedia(ref, CTX)).not.toBe(first);
+  });
+
+  it('answers a join from another result as a duplicate, and its own result as saved', async () => {
+    let resolve: (r: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>((r) => {
+        resolve = r;
+      }),
+    );
+    const ref = urlRef();
+    const first = saveMedia(ref, { ...CTX, owner: 'result-a' });
+    const own = saveMedia(ref, { ...CTX, owner: 'result-a' });
+    const other = saveMedia(ref, { ...CTX, owner: 'result-b' });
+    const otherInline = awaitInFlightSave(CTX.chatId, ref.key, 'result-b');
+    const ownInline = awaitInFlightSave(CTX.chatId, ref.key, 'result-a');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    resolve(new Response(MP3, { status: 200 }));
+    const started = await first;
+    if (started.status !== 'saved') throw new Error('not saved');
+    expect(await own).toEqual(started);
+    expect(await ownInline).toEqual(started);
+    const repeat = { status: 'duplicate', artefactId: started.artefactId, joined: true };
+    expect(await other).toEqual(repeat);
+    expect(await otherInline).toEqual(repeat);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('never joins the same key across two chats', async () => {

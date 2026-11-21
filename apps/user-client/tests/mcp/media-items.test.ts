@@ -18,19 +18,19 @@ const item = (key: string, status: MediaItem['status'], over: Partial<MediaItem>
 
 describe('titleFor', () => {
   it('numbers files by kind when there is no provider name', () => {
-    expect(titleFor(ref(), 1, 2)).toBe('Audio 1');
-    expect(titleFor(ref(), 2, 2)).toBe('Audio 2');
-    expect(titleFor(ref({ kind: 'video' }), 2, 3)).toBe('Video 2');
-    expect(titleFor(ref(), 1, 1)).toBe('Audio 1');
+    expect(titleFor(ref(), 1)).toBe('Audio 1');
+    expect(titleFor(ref(), 2)).toBe('Audio 2');
+    expect(titleFor(ref({ kind: 'video' }), 2)).toBe('Video 2');
+    expect(titleFor(ref(), 1)).toBe('Audio 1');
   });
 
   it('ignores a generic provider name', () => {
-    expect(titleFor(ref({ providerName: 'content.mp3' }), 1, 1)).toBe('Audio 1');
-    expect(titleFor(ref({ providerName: '0123abcd4567ef.mp3' }), 3, 3)).toBe('Audio 3');
+    expect(titleFor(ref({ providerName: 'content.mp3' }), 1)).toBe('Audio 1');
+    expect(titleFor(ref({ providerName: '0123abcd4567ef.mp3' }), 3)).toBe('Audio 3');
   });
 
   it('uses a provider name a person chose', () => {
-    expect(titleFor(ref({ providerName: 'Morning Birdsong' }), 1, 1)).toBe('Morning Birdsong');
+    expect(titleFor(ref({ providerName: 'Morning Birdsong' }), 1)).toBe('Morning Birdsong');
   });
 });
 

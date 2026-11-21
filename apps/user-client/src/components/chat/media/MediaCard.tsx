@@ -348,21 +348,32 @@ export function MediaCard({
         expiresAt: item.source.expiresAt,
         providerName: null,
       },
-      { chatId, personaId, serverName: serverLabel, toolName: toolName ?? '', title: item.title },
+      {
+        chatId,
+        personaId,
+        serverName: serverLabel,
+        toolName: toolName ?? '',
+        title: item.title,
+        ...(item.owner !== undefined ? { owner: item.owner } : {}),
+      },
     ).catch((): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }));
     await settleFrom(item.key, outcome);
   };
 
-  const settleFrom = (key: string, outcome: MediaSaveOutcome): Promise<void> =>
-    // A duplicate of this card's own key is its own earlier save finishing, not a repeat.
-    outcome.status === 'failed'
-      ? settle(key, { status: 'failed', cause: outcome.cause })
-      : settle(key, { status: 'saved', artefactId: outcome.artefactId });
+  const settleFrom = (key: string, outcome: MediaSaveOutcome): Promise<void> => {
+    if (outcome.status === 'failed') return settle(key, { status: 'failed', cause: outcome.cause });
+    // A joined save was another result's: its card shows the player, this one the marker.
+    if (outcome.status === 'duplicate' && outcome.joined) {
+      return settle(key, { status: 'duplicate', artefactId: outcome.artefactId });
+    }
+    // Any other duplicate of this card's own key is its own earlier save finishing.
+    return settle(key, { status: 'saved', artefactId: outcome.artefactId });
+  };
 
   // Inline bytes cannot be fetched again: join the tool's save if it still runs, else find
   // the finished one by its key, else nothing will ever arrive and the item has failed.
-  const settleInline = async (key: string, chat: string): Promise<void> => {
-    const running = awaitInFlightSave(chat, key);
+  const settleInline = async (key: string, chat: string, owner?: string): Promise<void> => {
+    const running = awaitInFlightSave(chat, key, owner);
     if (running) {
       const outcome = await running.catch(
         (): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }),
@@ -388,7 +399,7 @@ export function MediaCard({
       started.current.add(item.key);
       if (!item.source) {
         if (chatId === null) continue;
-        void settleInline(item.key, chatId);
+        void settleInline(item.key, chatId, item.owner);
       } else if (isExpired(item.source)) {
         void settle(item.key, { status: 'failed', cause: 'expired' });
       } else {

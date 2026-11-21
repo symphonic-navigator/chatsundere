@@ -109,13 +109,23 @@ function expiryOf(url: URL): number | null {
   return null;
 }
 
-/** Cheap non-cryptographic hash (FNV-1a): the key only has to tell blobs apart within one result. */
+/**
+ * Cheap non-cryptographic 64-bit hash (two 32-bit lanes, cyrb-style) over the whole text.
+ * The save de-duplicates by this key across the whole chat, so every character counts:
+ * two files that share a long head must not collide. Extraction stays synchronous.
+ */
 function hashOf(text: string): string {
-  let h = 0x811c9dc5;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
   for (let i = 0; i < text.length; i++) {
-    h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
   }
-  return h.toString(16);
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0');
+  return `${hex(h2)}${hex(h1)}`;
 }
 
 function kindOf(mime: string): MediaKind {
@@ -161,13 +171,11 @@ function bytesOutcome(base64: unknown, mimeRaw: unknown): Outcome {
   const mime = normaliseMime(mimeRaw);
   if (typeof base64 !== 'string' || base64 === '' || mime === null) return null;
   if (!ALLOWED_MIMES.has(mime)) {
-    return isRefusableMime(mime)
-      ? { refused: `bytes:${hashOf(base64.slice(0, 64))}:${base64.length}` }
-      : null;
+    return isRefusableMime(mime) ? { refused: `bytes:${hashOf(base64)}:${base64.length}` } : null;
   }
   return {
     ref: {
-      key: `bytes:${hashOf(base64.slice(0, 64))}:${base64.length}`,
+      key: `bytes:${hashOf(base64)}:${base64.length}`,
       kind: kindOf(mime),
       mime,
       source: { kind: 'bytes', base64 },

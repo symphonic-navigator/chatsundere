@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type SyntheticEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { claimMediaFloor, releaseMediaFloor } from '../../../lib/media/media-floor.js';
 
 /** Props to spread onto the one `<audio>` or `<video>` element a player owns. */
@@ -36,8 +36,8 @@ export interface MediaElementControls {
 
 /**
  * One media element per artefact, played only from a `blob:` URL this hook owns. Playing
- * claims the floor as `player:<artefactId>`, so another player or read-aloud pauses; pausing,
- * ending or unmounting gives it back.
+ * claims the floor as `player:<artefactId>:<instance>`, so another player or read-aloud
+ * pauses; pausing, ending or unmounting gives it back.
  */
 export function useMediaElement(
   artefactId: string,
@@ -51,7 +51,10 @@ export function useMediaElement(
   const [elementDurationMs, setElementDurationMs] = useState<number | null>(null);
   // While the thumb is dragged, timeupdate would pull it back to the playing position.
   const scrubbing = useRef(false);
-  const owner = `player:${artefactId}`;
+  // Per instance: the chat card and the lightbox may both show one artefact, and each must
+  // pause the other and release only its own claim.
+  const instance = useId();
+  const owner = `player:${artefactId}:${instance}`;
 
   // Every Dexie read hands out a new Blob of the same bytes, so the URL is keyed on the file
   // and its size, not the Blob object: a new src would reset playback without a pause event.
