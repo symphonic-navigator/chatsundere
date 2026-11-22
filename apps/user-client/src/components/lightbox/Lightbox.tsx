@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { ArtefactRow } from '../../boot/client-data-db.js';
+import { triggerDownload } from '../../lib/download.js';
 import { prefersReducedMotion } from '../../lib/reduced-motion.js';
+import { useBlobBytes } from '../../sync/blob-fetch.js';
 import { TagEditor } from '../artefact/TagEditor.js';
 import { BlobImage } from '../blob/BlobImage.js';
 import { CopyButton } from '../chat/markdown/CopyButton.js';
+import { MediaPlayer } from '../chat/media/MediaCard.js';
+import { mediaCopy } from '../chat/media/media-copy.js';
 import { FormatPicker } from './FormatPicker';
 import { LightboxTextBody } from './LightboxTextBody';
 import { type PreviewFormat, detectFormat, formatToExtension } from './format-detect';
@@ -96,7 +101,10 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
   useEffect(() => {
     if (p.items.length === 0) return;
     const onKey = (e: KeyboardEvent): void => {
+      // Arrow keys inside a player seek; they must not also flip to the neighbour.
+      const inPlayer = e.target instanceof Element && e.target.closest('.media-player') !== null;
       if (e.key === 'Escape') closeRef.current();
+      else if (inPlayer) return;
       else if (e.key === 'ArrowRight') navRef.current.next();
       else if (e.key === 'ArrowLeft') navRef.current.prev();
     };
@@ -372,7 +380,9 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
                 {copied ? 'Copied' : 'Copy'}
               </button>
             )}
-            {item.caps.download && (
+            {item.caps.download && item.kind === 'media' && item.artefact ? (
+              <MediaDownload key={item.id} artefact={item.artefact} fileName={item.fileName} />
+            ) : item.caps.download ? (
               <button
                 type="button"
                 className="lightbox-btn"
@@ -386,7 +396,7 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
               >
                 Download
               </button>
-            )}
+            ) : null}
             {item.caps.delete && p.onDelete ? (
               <button
                 type="button"
@@ -434,7 +444,15 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
           ) : null}
         </div>
         <div className="lightbox-body">
-          {item.kind === 'image' ? (
+          {item.kind === 'media' && item.artefact ? (
+            <div className="lightbox-media">
+              <MediaPlayer
+                artefact={item.artefact}
+                title={item.title ?? item.fileName}
+                menu={false}
+              />
+            </div>
+          ) : item.kind === 'image' ? (
             item.blobSource && !item.imageUrl ? (
               // Lazy-on-view (§6): the fetch is dismissable at any time — closing
               // detaches (useBlobBytes) and the background fetch completes onto the
@@ -491,5 +509,52 @@ export function Lightbox(p: LightboxProps): JSX.Element | null {
       </div>
     </dialog>,
     document.body,
+  );
+}
+
+/**
+ * Download for an audio or video artefact. It shares the player's vault fetch
+ * (fetches are deduped by row and field), so it enables as soon as the bytes
+ * land, and says in words, not a title, why it cannot yet: still on its way,
+ * unreachable, or never leaving the device that saved it.
+ */
+function MediaDownload({
+  artefact,
+  fileName,
+}: {
+  artefact: ArtefactRow;
+  fileName: string;
+}): JSX.Element {
+  const fetched = useBlobBytes('artefacts', artefact.id, 'blob');
+  // An empty Blob counts as missing, as in the player.
+  const local = artefact.blob && artefact.blob.size > 0 ? artefact.blob : null;
+  const bytes = local ?? (fetched.state === 'ready' ? (fetched.bytes ?? null) : null);
+  const reason =
+    bytes !== null
+      ? null
+      : fetched.state === 'terminal'
+        ? mediaCopy.deviceOnly
+        : fetched.retry
+          ? mediaCopy.failed.unreachable
+          : mediaCopy.downloading;
+  return (
+    <>
+      <button
+        type="button"
+        className="lightbox-btn"
+        disabled={reason !== null}
+        aria-describedby={reason !== null ? 'lightbox-download-reason' : undefined}
+        onClick={() => {
+          if (bytes) triggerDownload(bytes, fileName);
+        }}
+      >
+        Download
+      </button>
+      {reason !== null ? (
+        <span id="lightbox-download-reason" className="lightbox-btn-reason">
+          {reason}
+        </span>
+      ) : null}
+    </>
   );
 }

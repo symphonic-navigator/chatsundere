@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import {
+  type ArtefactRow,
   _resetClientDataDbForTests,
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
 import { addGeneratedArtefact } from '../../src/data/artefacts.js';
 import { Treasury } from '../../src/routes/app/treasury.js';
+import { _resetBlobFetchForTests, _setBlobFetchDeps } from '../../src/sync/blob-fetch.js';
 
 beforeEach(async () => {
   await _resetClientDataDbForTests();
@@ -157,4 +159,196 @@ test('hidden (adult-in-SFW) persona artefacts and tags do not leak into Treasury
   fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
   await waitFor(() => screen.getByRole('button', { name: 'Add tag safe' }));
   expect(screen.queryByRole('button', { name: 'Add tag secret' })).not.toBeInTheDocument();
+});
+
+test('?type=media&open=<id> opens that file in the lightbox with its player', async () => {
+  await seedPersona('p1', 'Mei');
+  await addGeneratedArtefact({ chatId: 'c1', personaId: 'p1', title: 'Pomodoro', content: '<x>' });
+  await getClientDataDb().artefacts.add({
+    id: 'au1',
+    chatId: 'c1',
+    personaId: 'p1',
+    projectId: null,
+    origin: 'generated',
+    kind: 'audio',
+    format: 'audio',
+    title: 'Theme song',
+    fileName: 'theme-song.mp3',
+    mime: 'audio/mpeg',
+    content: '',
+    tags: [],
+    favourite: false,
+    createdAt: 1,
+    updatedAt: 1,
+    mediaMeta: { key: 'gen:au1', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 't' },
+  });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?type=media&open=au1']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.getByRole('tab', { name: 'Audio & video' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.queryByText('Pomodoro')).not.toBeInTheDocument();
+  const player = document.querySelector('.lightbox-body [data-media-artefact="au1"]');
+  expect(player).not.toBeNull();
+  expect(screen.getByText('via ElevenLabs · t')).toBeInTheDocument();
+  // Text-only actions stay away from a media file.
+  expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+});
+
+test('an unknown ?open id opens nothing', async () => {
+  await seedPersona('p1', 'Mei');
+  await addGeneratedArtefact({ chatId: 'c1', personaId: 'p1', title: 'Pomodoro', content: '<x>' });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?open=nope']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => screen.getByText('Pomodoro'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('a deep-linked id that is not among the visible rows is dropped, so a tab switch never opens it', async () => {
+  await seedPersona('p1', 'Mei');
+  await seedPersona('p2', 'Spicy', true);
+  await getClientDataDb().settings.update(1, { adultMode: 'sfw' });
+  await seedTaggedArtefact('a1', 'p1', 'Visible', 'safe');
+  await seedTaggedArtefact('hidden', 'p2', 'Hidden', 'secret');
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?open=hidden']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => screen.getByText('Visible'));
+  fireEvent.click(screen.getByRole('tab', { name: 'Docs' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'All' }));
+  // Flip SFW off: the hidden row becomes visible, and still must not pop open.
+  await getClientDataDb().settings.update(1, { adultMode: 'nsfw' });
+  await qc.invalidateQueries();
+  await waitFor(() => screen.getByText('Hidden'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+async function seedMedia(over: Partial<ArtefactRow>): Promise<void> {
+  await getClientDataDb().artefacts.add({
+    id: 'au1',
+    chatId: 'c1',
+    personaId: 'p1',
+    projectId: null,
+    origin: 'generated',
+    kind: 'audio',
+    format: 'audio',
+    title: 'Theme song',
+    fileName: 'theme-song.mp3',
+    mime: 'audio/mpeg',
+    content: '',
+    tags: [],
+    favourite: false,
+    createdAt: 1,
+    updatedAt: 1,
+    mediaMeta: { key: 'gen:au1', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 't' },
+    ...over,
+  });
+}
+
+function renderOpen(): void {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/app/treasury?type=media&open=au1']}>
+        <Treasury />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+test('the lightbox has one Download for media, and says in words why it is unavailable', async () => {
+  await seedPersona('p1', 'Mei');
+  // An empty Blob is no file; the oversize sentinel means no fetch will ever bring it.
+  await seedMedia({ blob: new Blob([], { type: 'audio/mpeg' }), blobOversized: true });
+  renderOpen();
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  const download = screen.getByRole('button', { name: 'Download' });
+  expect(download).toBeDisabled();
+  expect(
+    within(document.querySelector('.lightbox-actions') ?? document.body).getByText(
+      'This file lives only on the device that saved it.',
+    ),
+  ).toBeInTheDocument();
+  // The player's own "⋯" menu would be a second Download.
+  expect(screen.queryByRole('button', { name: 'More for Theme song' })).not.toBeInTheDocument();
+});
+
+function actions(): HTMLElement {
+  const el = document.querySelector<HTMLElement>('.lightbox-actions');
+  if (!el) throw new Error('no lightbox toolbar');
+  return el;
+}
+
+test('while the bytes are on their way the lightbox says so', async () => {
+  _setBlobFetchDeps({
+    getMk: () => ({}) as never,
+    getBlob: () => new Promise<Uint8Array>(() => {}),
+  });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(within(actions()).getByText('Downloading from your vault…')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+  } finally {
+    _resetBlobFetchForTests();
+  }
+});
+
+test('after a failed fetch the lightbox says the file could not be reached', async () => {
+  // No key material: the fetch fails retriably, as when the vault cannot be reached.
+  _setBlobFetchDeps({ getMk: () => null });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(within(actions()).getByText("Couldn't reach the file.")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+  } finally {
+    _resetBlobFetchForTests();
+  }
+});
+
+test('the lightbox Download enables once the vault fetch lands', async () => {
+  _setBlobFetchDeps({
+    getMk: () => ({}) as never,
+    getBlob: async () => new Uint8Array([1, 2, 3]),
+    openBlob: async (_mk, _id, body) => body,
+    invalidate: () => {},
+  });
+  try {
+    await seedPersona('p1', 'Mei');
+    await seedMedia({ blobRef: { blobId: 'b1', bytes: 10 } });
+    renderOpen();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Download' })).not.toBeDisabled(),
+    );
+    expect(document.querySelector('.lightbox-btn-reason')).toBeNull();
+  } finally {
+    _resetBlobFetchForTests();
+  }
 });

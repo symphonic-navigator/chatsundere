@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { SyncCollection } from '@chatsundere/shared-types';
 import type { ArtefactRow, AttachmentRow } from '../../boot/client-data-db.js';
+import { mediaCopy } from '../chat/media/media-copy.js';
 
 /** Per-item capability descriptor — drives which action buttons the lightbox renders. */
 export interface Caps {
@@ -23,8 +24,9 @@ export interface Caps {
 /** Presentation item consumed by the lightbox — storage-agnostic. */
 export interface ViewableItem {
   id: string;
-  /** 'image' → `<img>`; 'text' → the format is derived from fileName/mime. */
-  kind: 'image' | 'text';
+  /** 'image' → `<img>`; 'text' → the format is derived from fileName/mime;
+   *  'media' → the shared audio/video player, fed by `artefact`. */
+  kind: 'image' | 'text' | 'media';
   fileName: string;
   /** Display title, separate from fileName — present for artefacts only. */
   title?: string;
@@ -45,6 +47,9 @@ export interface ViewableItem {
   tags?: string[];
   /** Human-readable origin label, e.g. "My Library › Doc" — present for library refs. */
   provenance?: string;
+  /** The stored row of a `kind: 'media'` item. The player resolves its own bytes
+   *  (local or fetched from the vault) and owns its object URL, so none is made here. */
+  artefact?: ArtefactRow;
   caps: Caps;
 }
 
@@ -54,6 +59,29 @@ export interface ViewableItem {
  *  creator-revokes contract of the attachment path — callers that map rows
  *  ad hoc and never unmount simply let it live for the page's lifetime. */
 export function artefactToViewable(row: ArtefactRow): ViewableItem {
+  if (row.kind === 'audio' || row.kind === 'video') {
+    return {
+      id: row.id,
+      kind: 'media',
+      fileName: row.fileName,
+      title: row.title,
+      mime: row.mime,
+      artefact: row,
+      tags: row.tags,
+      provenance: row.mediaMeta
+        ? `via ${mediaCopy.provider(row.mediaMeta.serverName, row.mediaMeta.toolName)}`
+        : undefined,
+      caps: {
+        rename: true,
+        remove: false,
+        copy: false,
+        download: true,
+        delete: true,
+        editSource: false,
+        editTags: true,
+      },
+    };
+  }
   if (row.kind === 'image') {
     // WS-D §6: a pulled-but-unhydrated image (refs present, bytes not yet on this
     // device) opens via the lazy blob source — a dismissable ring, hydrate-in-place,

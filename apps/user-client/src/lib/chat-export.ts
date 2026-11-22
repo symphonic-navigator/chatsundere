@@ -83,12 +83,24 @@ function pillLines(row: PillRow | undefined): string[] {
   if (!row) return [];
   if (row.kind === 'image-result') return [marker('Generated image')];
   if (row.kind !== 'tool-call') return []; // lore injection and voice expression
-  const p = row.payload as { name?: unknown; artefactIds?: unknown } | undefined;
+  const p = row.payload as { name?: unknown; artefactIds?: unknown; media?: unknown } | undefined;
   const name = typeof p?.name === 'string' && p.name ? p.name : 'tool';
   if (name === 'generate_image' && Array.isArray(p?.artefactIds) && p.artefactIds.length > 0) {
     return p.artefactIds.map(() => marker('Generated image'));
   }
-  return [marker(`Used tool: ${toolDisplayName(name)}`)];
+  return [marker(`Used tool: ${toolDisplayName(name)}`), ...mediaLines(p?.media)];
+}
+
+/** One marker per audio or video file an MCP result brought into the chat. */
+function mediaLines(media: unknown): string[] {
+  if (!Array.isArray(media)) return [];
+  return media.flatMap((item: unknown) => {
+    const i = item as { kind?: unknown; title?: unknown } | null;
+    if (typeof i?.title !== 'string') return [];
+    if (i.kind === 'audio') return [marker(`Audio: ${i.title}`)];
+    if (i.kind === 'video') return [marker(`Video: ${i.title}`)];
+    return [];
+  });
 }
 
 /** The body of one message as chunks (paragraphs or marker lines), in the order the chat shows them. */

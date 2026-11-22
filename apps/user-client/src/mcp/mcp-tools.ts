@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { MediaSaveOutcome } from '../lib/media/media-save.js';
 import type { Tool, ToolProgress, ToolResult } from '../tools/types.js';
 import { type McpCallResult, mcpToolsCall } from './mcp-client.js';
+import { type McpRawResult, extractMedia } from './media-extract.js';
+import {
+  type McpMediaContext,
+  type MediaItem,
+  modelLineFor,
+  refusedLine,
+  titleFor,
+} from './media-items.js';
 import type { EnsureResult } from './oauth/ensure-token.js';
 import { canonicalResource } from './oauth/url.js';
 import { mcpRedirectToolError } from './redirect-copy.js';
@@ -18,6 +27,9 @@ import type {
  * shell-like commands), so this is a hung-server guard rather than a latency goal.
  */
 const MCP_CALL_TIMEOUT_MS = 120_000;
+
+/** How long a tool result waits for its media to save; later saves finish in the background. */
+const MEDIA_WAIT_MS = 45_000;
 
 /** One server resolved active for this send (no plaintext key — opened lazily). */
 export interface McpActiveServer {
@@ -99,6 +111,8 @@ export interface McpToolContext {
    * it gave. Belongs to the send, so it is created where the send builds this context.
    */
   authNotices?: Map<string, string>;
+  /** Present when audio and video in results should be saved into the chat. */
+  media?: McpMediaContext;
 }
 
 /** Outcome of resolving a route on this device. */
@@ -145,6 +159,123 @@ function scrub(message: string, secrets: ReadonlyArray<string | null>): string {
 }
 
 const fail = (error: string): ToolResult => ({ ok: false, output: '', error });
+
+function itemFrom(base: MediaItem, outcome: MediaSaveOutcome | undefined): MediaItem {
+  if (outcome === undefined) return base;
+  // Saved bytes make the signed URL useless, so it is not kept anywhere.
+  const { source: _source, ...rest } = base;
+  if (outcome.status === 'failed') return { ...base, status: 'failed', cause: outcome.cause };
+  return { ...rest, status: outcome.status, artefactId: outcome.artefactId };
+}
+
+/** The stored titles of the artefacts this result's duplicates repeat; a failed lookup is just left out. */
+async function titlesOfEarlier(
+  items: MediaItem[],
+  media: McpMediaContext,
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  const titleOf = media.titleOf;
+  if (!titleOf) return titles;
+  const ids = new Set(
+    items.flatMap((i) => (i.status === 'duplicate' && i.artefactId ? [i.artefactId] : [])),
+  );
+  await Promise.all(
+    [...ids].map(async (id) => {
+      const title = await titleOf(id).catch(() => null);
+      if (title) titles.set(id, title);
+    }),
+  );
+  return titles;
+}
+
+/**
+ * Save the audio and video of a successful result and tell the model, in one line, what the
+ * user truly sees. A save failure never fails the tool. Signed URLs go only into the pill's
+ * media items, never into the output. The line leads the output because a replayed result
+ * keeps only its head, and the names in it are what later turns refer to.
+ */
+async function withMedia(
+  result: ToolResult,
+  raw: McpRawResult,
+  media: McpMediaContext,
+  serverName: string,
+  toolName: string,
+  signal?: AbortSignal,
+): Promise<ToolResult> {
+  const { refs, refused } = extractMedia(raw);
+  if (refs.length === 0) {
+    if (refused === 0) return result;
+    // No item carries the count, so the card reads it from its own field.
+    return {
+      ...result,
+      output: `${refusedLine(refused)}\n\n${result.output}`,
+      meta: { ...(result.meta ?? {}), media: [], mediaRefused: refused },
+    };
+  }
+  const seen = { audio: 0, video: 0 };
+  // Lets a save this result joins, started for another result, come back as a duplicate.
+  const owner = crypto.randomUUID();
+  const base: MediaItem[] = refs.map((ref, i) => {
+    seen[ref.kind] += 1;
+    return {
+      key: ref.key,
+      kind: ref.kind,
+      mime: ref.mime,
+      title: titleFor(ref, seen[ref.kind]),
+      status: 'saving',
+      ...(ref.source.kind === 'url'
+        ? { source: { url: ref.source.url, expiresAt: ref.expiresAt } }
+        : {}),
+      ...(i === 0 && refused > 0 ? { refused } : {}),
+      owner,
+    };
+  });
+
+  const outcomes: Array<MediaSaveOutcome | undefined> = refs.map(() => undefined);
+  // The save is not tied to the turn's signal: a stopped turn should still keep its files.
+  const saves = refs.map((ref, i) =>
+    media
+      .save(ref, {
+        chatId: media.chatId,
+        personaId: media.personaId,
+        serverName,
+        toolName,
+        title: base[i]?.title ?? '',
+        owner,
+      })
+      .catch((): MediaSaveOutcome => ({ status: 'failed', cause: 'unreachable' }))
+      .then((outcome) => {
+        outcomes[i] = outcome;
+      }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  await Promise.race([
+    Promise.all(saves),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, MEDIA_WAIT_MS);
+    }),
+    new Promise<void>((resolve) => {
+      if (!signal) return;
+      if (signal.aborted) {
+        resolve();
+        return;
+      }
+      onAbort = resolve;
+      signal.addEventListener('abort', onAbort, { once: true });
+    }),
+  ]);
+  clearTimeout(timer);
+  if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+
+  const items = base.map((item, i) => itemFrom(item, outcomes[i]));
+  const earlierTitles = await titlesOfEarlier(items, media);
+  return {
+    ...result,
+    output: `${modelLineFor(items, earlierTitles)}\n\n${result.output}`,
+    meta: { ...(result.meta ?? {}), media: items },
+  };
+}
 
 /** Build the active MCP tools for this send. Mirrors `contributeKnowledgeTools`. */
 export function contributeMcpTools(ctx: McpToolContext): Tool[] {
@@ -372,7 +503,9 @@ export function contributeMcpTools(ctx: McpToolContext): Tool[] {
             if (oauth && r.auth === 'insufficient-scope') return notice(server, 'scope', r.scope);
             if (r.redirect) return redirected(server);
             if (r.error) return fail(scrub(r.error, secrets));
-            return { ok: true, output: r.stdout, error: null };
+            const ok: ToolResult = { ok: true, output: r.stdout, error: null };
+            if (!ctx.media || !r.raw) return ok;
+            return withMedia(ok, r.raw, ctx.media, server.name, n.originalName, signal);
           }
         } catch (e) {
           return fail(scrub(e instanceof Error ? e.message : 'MCP tool failed.', secrets));

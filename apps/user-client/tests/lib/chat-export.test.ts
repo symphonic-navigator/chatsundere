@@ -210,6 +210,18 @@ describe('chatToMarkdown', () => {
     );
   });
 
+  it('marks the audio and video an MCP tool returned, one line each', () => {
+    const m = msg('persona', at(14, 18, 3), [{ type: 'pill', pillId: 'm1' }]);
+    const media = [
+      { key: 'gen:G1', kind: 'audio', mime: 'audio/mpeg', title: 'Audio 1', status: 'saved' },
+      { key: 'gen:G2', kind: 'video', mime: 'video/mp4', title: 'Video 1', status: 'saving' },
+    ];
+    const pills = new Map([['m1', pill('m1', 'tool-call', { name: 'el_generate', media })]]);
+    expect(chatToMarkdown(input({ messages: [m], pills }))).toContain(
+      '*[Used tool: el_generate]*\n\n*[Audio: Audio 1]*\n\n*[Video: Video 1]*',
+    );
+  });
+
   it('lists image and file attachments by name, never their bytes, and skips deleted ones', () => {
     const m = msg('user', at(14, 18, 5), 'See these.');
     const rows = [

@@ -95,7 +95,7 @@ describe('mcpToolsCall', () => {
         }),
       );
     const r = await mcpToolsCall(directEndpoint, 'search', { q: 'x' });
-    expect(r).toEqual({ stdout: 'hello', error: null });
+    expect(r).toMatchObject({ stdout: 'hello', error: null });
   });
   it('surfaces an isError result as a constructive error', async () => {
     vi.spyOn(globalThis, 'fetch')
@@ -182,7 +182,7 @@ describe('proxy routing', () => {
         }),
       );
     const r = await mcpToolsCall(proxyEndpoint, 'search', { q: 'x' });
-    expect(r).toEqual({ stdout: 'ok', error: null });
+    expect(r).toMatchObject({ stdout: 'ok', error: null });
     // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control
     const firstCall = fetchMock.mock.calls[2]![0] as Request;
     // biome-ignore lint/style/noNonNullAssertion: mock call array is under our control

@@ -2953,6 +2953,12 @@ h1 {
   padding: 0.5rem 0.75rem 0;
 }
 
+/* Why a toolbar action is unavailable, as visible text (titles never show on touch). */
+.lightbox-btn-reason {
+  align-self: center;
+  font-size: 11px;
+  color: var(--color-paper-soft);
+}
 .lightbox-btn {
   font-size: 11px;
   font-family: var(--font-mono);
@@ -3017,6 +3023,22 @@ h1 {
   justify-content: center;
   overflow: auto;
   min-height: 0;
+}
+
+/* An audio or video artefact in the lightbox: the shared player, centred and
+ * as wide as a phone allows, never wider than a comfortable reading column. */
+.lightbox-media {
+  width: min(100%, 40rem);
+  max-height: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.lightbox-media > .media-player[data-kind="audio"] {
+  padding: 0.6rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-aurora-500) 22%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 4%, var(--color-ink));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-aurora-500) 8%, transparent);
 }
 
 .lightbox-img {
@@ -3879,6 +3901,443 @@ h1 {
   border: 1px solid color-mix(in srgb, var(--color-paper) 12%, transparent);
 }
 
+/* ===== MCP audio and video (MediaCard / MediaPlayer) ===== */
+/* Like .image-pill-block: the media card always starts on its own line under
+ * the tool pill, never inside its expandable detail. */
+.media-card-block {
+  display: block;
+  margin-block: 0.25rem 0.75rem;
+}
+.media-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.6rem 0.6rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-aurora-500) 22%, transparent);
+  background: radial-gradient(
+      120% 80% at 0% 0%,
+      color-mix(in srgb, var(--color-aurora-500) 10%, transparent),
+      transparent 70%
+    ), color-mix(in srgb, var(--color-paper) 4%, var(--color-ink));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-aurora-500) 8%, transparent);
+  color: var(--color-paper);
+}
+.media-card-provider {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.6;
+  color: var(--color-paper-soft);
+  background: color-mix(in srgb, var(--color-paper) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-paper) 10%, transparent);
+}
+.media-card-items {
+  display: flex;
+  flex-direction: column;
+}
+/* Stacked rows read as one list: a hairline between neighbours, none outside. */
+.media-card-items > * + * {
+  border-top: 1px solid color-mix(in srgb, var(--color-paper) 8%, transparent);
+}
+.media-card-items > .media-player[data-kind="video"] + *,
+.media-card-items > * + .media-player[data-kind="video"] {
+  border-top: 0;
+  margin-top: 0.5rem;
+}
+.media-card-duplicate,
+.media-action,
+.media-note-action {
+  appearance: none;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-paper) 16%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 4%, transparent);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.media-card-duplicate {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--color-paper-soft);
+}
+.media-card-duplicate:hover,
+.media-action:hover,
+.media-note-action:hover {
+  background: color-mix(in srgb, var(--color-paper) 9%, transparent);
+}
+.media-action[aria-disabled="true"],
+.media-card-duplicate[aria-disabled="true"],
+.media-play[aria-disabled="true"],
+.media-video-start[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.media-card-note {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--color-paper) 55%, transparent);
+}
+.media-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--color-paper-soft);
+}
+.media-note-action {
+  min-height: 32px;
+  font-size: 0.74rem;
+}
+
+/* --- Audio row: line 1 play · title · time · ⋯; line 2 the seek bar --- */
+.media-audio {
+  display: flex;
+  flex-direction: column;
+  padding-block: 0.35rem 0.25rem;
+}
+.media-audio-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.media-play {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--color-aurora-200) 35%, transparent);
+  background: radial-gradient(circle at 35% 30%, var(--color-aurora-500), var(--color-aurora-700));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-aurora-500) 35%, transparent);
+  color: var(--color-aurora-50);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 160ms ease;
+}
+.media-play:not([aria-disabled="true"]):active {
+  transform: scale(0.94);
+}
+.media-play[data-playing] {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-aurora-500) 55%, transparent);
+}
+.media-play-glyph {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -0.12em;
+}
+.media-play:not([data-playing]) .media-play-glyph {
+  /* the triangle's optical centre sits left of its box */
+  transform: translateX(1px);
+}
+.media-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.media-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-paper-soft);
+}
+.media-menu {
+  flex: none;
+  display: inline-flex;
+}
+
+/* The native range keeps keyboard, screen-reader and touch behaviour; only its
+ * look is ours. The 44 px box is the thumb target; the track stays thin. */
+.media-seek {
+  --media-progress: 0%;
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+.media-seek:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.media-seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--color-aurora-200) var(--media-progress),
+    color-mix(in srgb, var(--color-paper) 16%, transparent) var(--media-progress)
+  );
+}
+.media-seek::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-paper) 16%, transparent);
+}
+.media-seek::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-aurora-200);
+}
+.media-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-aurora-50);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-aurora-500) 60%, transparent);
+}
+.media-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-aurora-50);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-aurora-500) 60%, transparent);
+}
+.media-seek:focus-visible {
+  outline: none;
+}
+.media-seek:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-aurora-200);
+  outline-offset: 2px;
+}
+
+/* --- Video tile: poster, duration bottom-left, play centre, ⋯ top-right --- */
+.media-video-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.media-video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--media-aspect, 16 / 9);
+  max-height: 70dvh;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-paper) 12%, transparent);
+  background: var(--color-ink);
+}
+.media-video-el,
+.media-video-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.media-video-poster {
+  object-fit: cover;
+}
+.media-video-blank {
+  background: radial-gradient(90% 90% at 50% 40%, var(--color-aurora-900), var(--color-ink));
+}
+.media-video-start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(180deg, transparent 55%, rgb(0 0 0 / 0.45));
+  color: var(--color-aurora-50);
+  cursor: pointer;
+}
+.media-video-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding-left: 4px;
+  border-radius: 50%;
+  font-size: 20px;
+  background: rgb(5 2 16 / 0.55);
+  border: 1px solid color-mix(in srgb, var(--color-paper) 30%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--color-aurora-500) 40%, transparent);
+  backdrop-filter: blur(6px);
+}
+.media-video-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-paper);
+  background: rgb(5 2 16 / 0.65);
+  pointer-events: none;
+}
+.media-video-menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  border-radius: var(--radius-pill);
+  background: rgb(5 2 16 / 0.55);
+}
+.media-video-menu .cs-overflow-trigger {
+  margin: 0;
+  color: var(--color-paper);
+}
+.media-video-transport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.5rem 0.5rem 0.25rem;
+  background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.6));
+}
+.media-video-transport .media-audio-line {
+  justify-content: space-between;
+}
+.media-video-transport .media-time {
+  flex: 1 1 auto;
+  color: var(--color-paper);
+}
+.media-fullscreen {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-paper);
+  font-size: 18px;
+  cursor: pointer;
+}
+.media-video-caption {
+  display: flex;
+  min-width: 0;
+  padding-inline: 2px;
+}
+.media-video-caption .media-title {
+  font-size: 0.82rem;
+  color: var(--color-paper-soft);
+}
+
+/* --- Saving, failed and settling states --- */
+.media-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-block: 0.5rem;
+}
+.media-state-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.media-state[data-state="settling"] {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+}
+.media-state-glyph {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 15px;
+  color: var(--color-paper-soft);
+  background: color-mix(in srgb, var(--color-paper) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-paper) 10%, transparent);
+}
+.media-state-text {
+  font-size: 0.78rem;
+  color: var(--color-paper-soft);
+}
+.media-state[data-state="failed"] .media-state-text {
+  color: var(--color-danger);
+}
+.media-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* Why Try again is greyed out, in view: a title never shows on touch. */
+.media-state-reason {
+  font-size: 0.72rem;
+  color: var(--color-paper-soft);
+}
+.media-state-bar {
+  position: relative;
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-aurora-500) 18%, transparent);
+}
+.media-state-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--color-aurora-500);
+  transition: width 240ms ease;
+}
+.media-state-bar[data-indeterminate] i {
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--color-aurora-500), transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .media-state-bar[data-indeterminate] i {
+    animation: media-shimmer 1.6s ease-in-out infinite;
+  }
+}
+@keyframes media-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media-play,
+  .media-state-bar i {
+    transition: none;
+  }
+}
+
 .artefact-section {
   display: flex;
   flex-direction: column;
@@ -3931,6 +4390,12 @@ h1 {
 .treasury-glyph.g-img {
   color: #e58fc8;
   background: rgba(229, 143, 200, 0.12);
+}
+
+/* amber for audio and video */
+.artefact-glyph.g-media {
+  color: #f2b07a;
+  background: rgba(242, 176, 122, 0.12);
 }
 
 /* Empty-state note */
@@ -4022,6 +4487,10 @@ h1 {
 .treasury-glyph.g-code {
   color: #e0a85f;
   background: rgba(224, 168, 95, 0.12);
+}
+.treasury-glyph.g-media {
+  color: #f2b07a;
+  background: rgba(242, 176, 122, 0.12);
 }
 .treasury-check {
   flex: 0 0 auto;
@@ -4265,11 +4734,33 @@ h1 {
 .artefact-picker-row-body:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+.artefact-picker-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
 .artefact-picker-row-title {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.artefact-picker-row-reason {
+  font-size: 0.7rem;
+  color: var(--color-paper-soft);
+}
+.artefact-picker-row[data-disabled] .artefact-picker-row-body {
+  cursor: not-allowed;
+}
+.artefact-picker-row[data-disabled] .artefact-picker-row-body:hover {
+  background: transparent;
+}
+.artefact-picker-row[data-disabled] .artefact-glyph,
+.artefact-picker-row[data-disabled] .artefact-picker-row-title,
+.artefact-picker-row[data-disabled] .artefact-picker-row-chip {
+  opacity: 0.45;
 }
 .artefact-picker-row-chip {
   font-size: 0.65rem;
@@ -5314,6 +5805,14 @@ h1 {
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-paper);
   font-weight: 600;
+}
+/* The Treasury type tabs: six labels of very different lengths ("All" next to
+ * "Audio & video") share 380 px, so each takes its own width instead of an
+ * equal share that would wrap the longest one onto two lines. */
+.cs-segmented-fit .cs-seg {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  padding-inline: 6px;
 }
 
 /* ── ListScaffold primitive (fixed header/footer; only list scrolls) ──── */

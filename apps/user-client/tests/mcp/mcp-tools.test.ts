@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { REPLAY_RESULT_MAX_CHARS } from '../../src/lib/tool-replay.js';
 import { mcpToolsCall } from '../../src/mcp/mcp-client.js';
 import {
   type McpActiveServer,
@@ -673,5 +674,146 @@ describe('a server that answers with a redirect (spec §6.3)', () => {
     expect(contributeMcpTools(ctx({ servers: [server] })).map((t) => t.name)).toEqual(
       tools.map((t) => t.name),
     );
+  });
+});
+
+describe('contributeMcpTools with media in the result', () => {
+  const EL_URL =
+    'https://elevenlabsusercontent.com/G1/content.mp3?Expires=1795302000&KeyName=k&Signature=s';
+  const elevenLabs = JSON.stringify({
+    generations: [
+      { generation_id: 'G1', modality: 'audio', full_res_url: EL_URL, preview_url: EL_URL },
+    ],
+  });
+  const withRaw = () =>
+    vi.mocked(mcpToolsCall).mockResolvedValue({
+      stdout: elevenLabs,
+      error: null,
+      raw: { content: [{ type: 'text', text: elevenLabs }] },
+    });
+  const mediaCtx = (save: NonNullable<McpToolContext['media']>['save']) =>
+    ctx({ media: { chatId: 'c1', personaId: 'p1', save } });
+
+  it('puts the model line before the output and carries the saved item in meta', async () => {
+    withRaw();
+    const save = vi.fn(async () => ({ status: 'saved' as const, artefactId: 'a1' }));
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const r = await tool?.execute({});
+    expect(r?.ok).toBe(true);
+    expect(r?.output).toBe(
+      `Shown to the user as players: Audio 1 = generation G1. Refer to them by these names in prose; do not repeat their URLs.\n\n${elevenLabs}`,
+    );
+    expect(r?.meta?.media).toEqual([
+      {
+        key: 'gen:G1',
+        kind: 'audio',
+        mime: 'audio/mpeg',
+        title: 'Audio 1',
+        status: 'saved',
+        artefactId: 'a1',
+        owner: expect.any(String),
+      },
+    ]);
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ key: 'gen:G1' }), {
+      chatId: 'c1',
+      personaId: 'p1',
+      serverName: 'GitHub',
+      toolName: 'search',
+      title: 'Audio 1',
+      owner: (r?.meta?.media as Array<{ owner: string }>)[0]?.owner,
+    });
+  });
+
+  it('returns an unfinished save as saving, with its source, after 45 s', async () => {
+    vi.useFakeTimers();
+    try {
+      withRaw();
+      const save = vi.fn(() => new Promise<never>(() => undefined));
+      const [tool] = contributeMcpTools(mediaCtx(save));
+      const pending = tool?.execute({});
+      await vi.advanceTimersByTimeAsync(44_999);
+      let settled = false;
+      void pending?.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const r = await pending;
+      const media = r?.meta?.media as Array<Record<string, unknown>>;
+      expect(media[0]?.status).toBe('saving');
+      expect(media[0]?.source).toEqual({ url: EL_URL, expiresAt: 1795302000000 });
+      expect(r?.output).toContain('Audio 1 is still being saved and appears when ready.');
+      expect(r?.output.split('\n\n')[0]).toContain('Audio 1 is still being saved');
+      expect(r?.output.split('\n\n')[0]).not.toContain('https:');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a rejected save as an unreachable failure, not a failed tool', async () => {
+    withRaw();
+    const save = vi.fn(async () => {
+      throw new Error('QuotaExceededError');
+    });
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const r = await tool?.execute({});
+    expect(r?.ok).toBe(true);
+    const media = r?.meta?.media as Array<Record<string, unknown>>;
+    expect(media[0]).toMatchObject({ status: 'failed', cause: 'unreachable' });
+    expect(r?.output).toContain('Audio 1 could not be saved (could not reach the file).');
+  });
+
+  it('carries a refused-only result to the card and keeps the model line', async () => {
+    const raw = { content: [{ type: 'audio', data: 'SUQz', mimeType: 'audio/x-tracker' }] };
+    vi.mocked(mcpToolsCall).mockResolvedValue({ stdout: 'done', error: null, raw });
+    const save = vi.fn();
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const r = await tool?.execute({});
+    expect(r?.output).toBe('1 file was not shown: unsupported type.\n\ndone');
+    expect(r?.meta).toEqual({ media: [], mediaRefused: 1 });
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('tells the model the earlier title of a duplicate it can look up', async () => {
+    withRaw();
+    const save = vi.fn(async () => ({ status: 'duplicate' as const, artefactId: 'a0' }));
+    const titleOf = vi.fn(async (id: string) => (id === 'a0' ? 'Morning Birdsong' : null));
+    const [tool] = contributeMcpTools(
+      ctx({ media: { chatId: 'c1', personaId: 'p1', save, titleOf } }),
+    );
+    const r = await tool?.execute({});
+    expect(r?.output).toContain('Audio 1 here is the same file as "Morning Birdsong" shown above.');
+  });
+
+  it('keeps the model line within the head a replay keeps of a long result', async () => {
+    const long = 'x'.repeat(REPLAY_RESULT_MAX_CHARS * 2);
+    vi.mocked(mcpToolsCall).mockResolvedValue({
+      stdout: long,
+      error: null,
+      raw: { content: [{ type: 'text', text: elevenLabs }] },
+    });
+    const save = vi.fn(async () => ({ status: 'saved' as const, artefactId: 'a1' }));
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const r = await tool?.execute({});
+    expect(r?.output.slice(0, REPLAY_RESULT_MAX_CHARS)).toContain('Audio 1 = generation G1');
+  });
+
+  it('gives every item of one result the same owner, and each result its own', async () => {
+    withRaw();
+    const save = vi.fn(async () => ({ status: 'saved' as const, artefactId: 'a1' }));
+    const [tool] = contributeMcpTools(mediaCtx(save));
+    const first = (await tool?.execute({}))?.meta?.media as Array<{ owner?: string }>;
+    const second = (await tool?.execute({}))?.meta?.media as Array<{ owner?: string }>;
+    expect(first[0]?.owner).toBeTruthy();
+    expect(second[0]?.owner).toBeTruthy();
+    expect(first[0]?.owner).not.toBe(second[0]?.owner);
+  });
+
+  it('leaves the result as it was without a media context', async () => {
+    withRaw();
+    const [tool] = contributeMcpTools(ctx());
+    const r = await tool?.execute({});
+    expect(r).toEqual({ ok: true, output: elevenLabs, error: null });
   });
 });

@@ -20,8 +20,17 @@ import {
   getClientDataDb,
   openClientDataDb,
 } from '../../src/boot/client-data-db.js';
-import { exportPersona } from '../../src/data/chatsundere-export.js';
+import {
+  EXPORT_FETCH_TIMEOUT_MS,
+  exportPersona,
+  exportPersonaWithReport,
+} from '../../src/data/chatsundere-export.js';
 import { importPersonaPack } from '../../src/data/chatsundere-import.js';
+import {
+  readPersonaPack,
+  writePersonaPack,
+} from '../../src/lib/chatsundere-transfer/persona-pack.js';
+import { _resetBlobFetchForTests, _setBlobFetchDeps } from '../../src/sync/blob-fetch.js';
 
 describe('persona export → import round-trip', () => {
   beforeEach(async () => {
@@ -361,5 +370,433 @@ describe('persona import — nested pillId / artefact-ref remapping (C1+I1 regre
     // (d) The artefact must exist under the new id.
     const artefact = await db.artefacts.get(newArtefactId);
     expect(artefact).toBeDefined();
+  });
+});
+
+describe('persona export → import round-trip — audio and video artefacts', () => {
+  const audioBytes = new Uint8Array([0x49, 0x44, 0x33, 4, 5, 6]);
+  const videoBytes = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
+  const posterBytes = new Uint8Array([0xff, 0xd8, 0xff, 9]);
+
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+    const db = getClientDataDb();
+    await db.personas.add({
+      id: 'p-media',
+      name: 'Media',
+      providerId: '',
+      modelId: '',
+      mcpOverrides: {},
+      libraryIds: [],
+    } as never);
+    await db.chats.add({
+      id: 'c-media',
+      personaId: 'p-media',
+      title: 'media chat',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 2,
+      resolvedMindspaceId: '',
+      libraryIds: [],
+      draftInput: '',
+      bookmarkedMessageCount: 0,
+    } satisfies ChatRow);
+    await db.messages.add({
+      id: 'm-media',
+      chatId: 'c-media',
+      role: 'persona',
+      contentBlocks: [{ type: 'pill', pillId: 'pill-media' }],
+      createdAt: 1,
+      updatedAt: 1,
+      bookmarked: false,
+      streamingState: 'complete',
+    } satisfies MessageRow);
+    await db.pills.add({
+      id: 'pill-media',
+      messageId: 'm-media',
+      kind: 'tool-call',
+      positionHint: 'inline',
+      status: 'completed',
+      payload: {
+        name: 'elevenlabs_creative_generate_speech',
+        result: 'ok',
+        media: [
+          {
+            key: 'gen:a',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 1',
+            status: 'saved',
+            artefactId: 'au-orig',
+          },
+          {
+            key: 'gen:v',
+            kind: 'video',
+            mime: 'video/mp4',
+            title: 'Video 1',
+            status: 'saved',
+            artefactId: 'vi-orig',
+          },
+        ],
+      },
+      createdAt: 1,
+    } satisfies PillRow);
+    const base = {
+      chatId: 'c-media',
+      personaId: 'p-media',
+      projectId: null,
+      origin: 'generated' as const,
+      content: '',
+      tags: ['tune'],
+      favourite: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await db.artefacts.add({
+      ...base,
+      id: 'au-orig',
+      kind: 'audio',
+      format: 'audio',
+      title: 'Theme song',
+      fileName: 'theme-song.mp3',
+      mime: 'audio/mpeg',
+      blob: new Blob([audioBytes], { type: 'audio/mpeg' }),
+      mediaMeta: { key: 'gen:a', durationMs: 46_000, serverName: 'ElevenLabs', toolName: 'tts' },
+    } satisfies ArtefactRow);
+    await db.artefacts.add({
+      ...base,
+      id: 'vi-orig',
+      kind: 'video',
+      format: 'video',
+      title: 'Clip',
+      fileName: 'clip.mp4',
+      mime: 'video/mp4',
+      blob: new Blob([videoBytes], { type: 'video/mp4' }),
+      thumbBlob: new Blob([posterBytes], { type: 'image/jpeg' }),
+      mediaMeta: { key: 'gen:v', durationMs: 5_000, serverName: 'ElevenLabs', toolName: 'video' },
+    } satisfies ArtefactRow);
+  });
+
+  afterEach(async () => {
+    await _resetClientDataDbForTests();
+  });
+
+  async function bytesOf(b: Blob | undefined): Promise<number[]> {
+    return b ? [...new Uint8Array(await b.arrayBuffer())] : [];
+  }
+
+  it('carries the bytes, the poster, the mime and the media provenance, and keeps the card pointing at them', async () => {
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: true });
+    const res = await importPersonaPack(blob, 'Media (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const chatId = chats[0]?.id ?? '';
+    const rows = await db.artefacts.where('chatId').equals(chatId).toArray();
+    const audio = rows.find((r) => r.kind === 'audio');
+    const video = rows.find((r) => r.kind === 'video');
+
+    expect(audio?.id).not.toBe('au-orig');
+    expect(audio?.format).toBe('audio');
+    expect(audio?.mime).toBe('audio/mpeg');
+    expect(audio?.blob?.type).toBe('audio/mpeg');
+    expect(await bytesOf(audio?.blob)).toEqual([...audioBytes]);
+    expect(audio?.mediaMeta).toEqual({
+      key: 'gen:a',
+      durationMs: 46_000,
+      serverName: 'ElevenLabs',
+      toolName: 'tts',
+    });
+    expect(audio?.tags).toEqual(['tune']);
+
+    expect(video?.blob?.type).toBe('video/mp4');
+    expect(await bytesOf(video?.blob)).toEqual([...videoBytes]);
+    expect(video?.thumbBlob?.type).toBe('image/jpeg');
+    expect(await bytesOf(video?.thumbBlob)).toEqual([...posterBytes]);
+
+    // The media card's saved items must resolve to the imported rows.
+    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    const block = msgs[0]?.contentBlocks.find((b) => b.type === 'pill');
+    const pillId = block && block.type === 'pill' ? block.pillId : '';
+    const pill = await db.pills.get(pillId);
+    const media = (pill?.payload as { media: { artefactId?: string }[] }).media;
+    expect(media.map((m) => m.artefactId)).toEqual([audio?.id, video?.id]);
+  });
+
+  it('carries no media link out, and brings none in, settling saves that cannot finish', async () => {
+    const db = getClientDataDb();
+    const signed = 'https://cdn.example/a.mp3?X-Amz-Signature=secret';
+    const source = { url: signed, expiresAt: Date.now() + 3_600_000 };
+    const pill = await db.pills.get('pill-media');
+    await db.pills.put({
+      ...(pill as PillRow),
+      payload: {
+        ...(pill?.payload as object),
+        media: [
+          {
+            key: 'gen:a',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 1',
+            status: 'saving',
+            source,
+          },
+          {
+            key: 'gen:x',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 2',
+            status: 'saving',
+            source,
+          },
+          {
+            key: 'gen:y',
+            kind: 'audio',
+            mime: 'audio/mpeg',
+            title: 'Audio 3',
+            status: 'failed',
+            cause: 'unreachable',
+            source,
+          },
+        ],
+      },
+    });
+
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: true });
+    const pack = await readPersonaPack(blob);
+    expect(JSON.stringify(pack.payload.pills)).not.toContain(signed);
+
+    // A pack written before the export stripped them, or by someone else, still carries links.
+    for (const p of pack.payload.pills) {
+      const media = (p.payload as { media?: Record<string, unknown>[] }).media ?? [];
+      for (const item of media) item.source = source;
+    }
+    const res = await importPersonaPack(await writePersonaPack(pack.payload), 'Media (copy)');
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const chatId = chats[0]?.id ?? '';
+    const audio = (await db.artefacts.where('chatId').equals(chatId).toArray()).find(
+      (r) => r.kind === 'audio',
+    );
+    const msgs = await db.messages.where('chatId').equals(chatId).toArray();
+    const block = msgs[0]?.contentBlocks.find((b) => b.type === 'pill');
+    const imported = await db.pills.get(block && block.type === 'pill' ? block.pillId : '');
+    const media = (imported?.payload as { media: Record<string, unknown>[] }).media;
+    expect(JSON.stringify(media)).not.toContain(signed);
+    for (const item of media) expect(item.source).toBeUndefined();
+    expect(media[0]).toMatchObject({ status: 'saved', artefactId: audio?.id });
+    expect(media[1]).toMatchObject({ status: 'failed', cause: 'unreachable' });
+    expect(media[2]).toMatchObject({ status: 'failed', cause: 'unreachable' });
+  });
+
+  it('leaves audio and video behind with the images when images are off', async () => {
+    const blob = await exportPersona('p-media', { memory: false, artefacts: true, images: false });
+    const res = await importPersonaPack(blob, 'Media (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('persona export — files whose bytes live only in the vault', () => {
+  const vaultBytes = new Uint8Array([7, 7, 7, 7]);
+
+  beforeEach(async () => {
+    await _resetClientDataDbForTests();
+    await openClientDataDb();
+    const db = getClientDataDb();
+    await db.personas.add({
+      id: 'p-v',
+      name: 'Vault',
+      providerId: '',
+      modelId: '',
+      mcpOverrides: {},
+      libraryIds: [],
+    } as never);
+    await db.chats.add({
+      id: 'c-v',
+      personaId: 'p-v',
+      title: 'v',
+      createdAt: 1,
+      updatedAt: 1,
+      lastMessageAt: 2,
+      resolvedMindspaceId: '',
+      libraryIds: [],
+      draftInput: '',
+      bookmarkedMessageCount: 0,
+    } satisfies ChatRow);
+    const base = {
+      chatId: 'c-v',
+      personaId: 'p-v',
+      projectId: null,
+      origin: 'generated' as const,
+      content: '',
+      tags: [],
+      favourite: false,
+      createdAt: 1,
+      updatedAt: 1,
+      kind: 'audio' as const,
+      format: 'audio' as const,
+      mime: 'audio/mpeg',
+      mediaMeta: { key: 'gen:x', durationMs: 1000, serverName: 'S', toolName: 't' },
+    };
+    // Synced from another device and never played here: a ref, no bytes.
+    await db.artefacts.add({
+      ...base,
+      id: 'in-vault',
+      title: 'In the vault',
+      fileName: 'in-vault.mp3',
+      blobRef: { blobId: 'blob-in-vault', bytes: 40 },
+    } satisfies ArtefactRow);
+    // Too large for the server: it only ever lived on the device that saved it.
+    await db.artefacts.add({
+      ...base,
+      id: 'device-only',
+      title: 'Device only',
+      fileName: 'device-only.mp3',
+      blobOversized: true,
+    } satisfies ArtefactRow);
+    // Played here once and pushed: bytes and a ref both present.
+    await db.artefacts.add({
+      ...base,
+      id: 'here',
+      title: 'Here',
+      fileName: 'here.mp3',
+      blob: new Blob([new Uint8Array([1, 2])], { type: 'audio/mpeg' }),
+      blobRef: { blobId: 'blob-here', bytes: 30 },
+      thumbBlobRef: { blobId: 'thumb-here', bytes: 30 },
+    } satisfies ArtefactRow);
+    _setBlobFetchDeps({
+      getMk: () => ({}) as never,
+      getBlob: async (ref) => {
+        if (ref.blobId !== 'blob-in-vault') throw new Error('not in this vault');
+        return vaultBytes;
+      },
+      openBlob: async (_mk, _id, body) => body,
+      invalidate: () => {},
+    });
+  });
+
+  afterEach(async () => {
+    _resetBlobFetchForTests();
+    await _resetClientDataDbForTests();
+  });
+
+  it('fetches bytes from the vault, counts what it cannot have, and carries no vault refs', async () => {
+    const { blob, missingFiles } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    expect(missingFiles).toBe(1);
+
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      expect(art.blobRef).toBeUndefined();
+      expect(art.thumbBlobRef).toBeUndefined();
+      expect(art.blobOversized).toBeUndefined();
+    }
+
+    const res = await importPersonaPack(blob, 'Vault (copy)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    const byTitle = new Map(rows.map((r) => [r.title, r]));
+    const fetched = byTitle.get('In the vault');
+    expect([...new Uint8Array((await fetched?.blob?.arrayBuffer()) ?? new ArrayBuffer(0))]).toEqual(
+      [...vaultBytes],
+    );
+    // No imported row may point at the source account's vault blobs.
+    for (const r of rows) {
+      expect(r.blobRef).toBeUndefined();
+      expect(r.thumbBlobRef).toBeUndefined();
+      expect(r.blobOversized).toBeUndefined();
+    }
+  });
+
+  it('gives up on a vault file that never arrives and counts it as missing', async () => {
+    _setBlobFetchDeps({ getBlob: () => new Promise<Uint8Array>(() => {}) });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let settled: { missingFiles: number } | undefined;
+      const run = exportPersonaWithReport('p-v', {
+        memory: false,
+        artefacts: true,
+        images: true,
+      }).then((r) => {
+        settled = r;
+      });
+      for (let i = 0; i < 10 && settled === undefined; i++) {
+        await vi.advanceTimersByTimeAsync(EXPORT_FETCH_TIMEOUT_MS);
+      }
+      await run;
+      // The stalled one and the oversized one.
+      expect(settled?.missingFiles).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('strips vault refs on import too, for packs written before the export did', async () => {
+    const { blob } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      art.blobRef = { blobId: 'source-vault', bytes: 1 };
+      art.blobOversized = true;
+    }
+    const legacy = await writePersonaPack(parsed.payload);
+    const res = await importPersonaPack(legacy, 'Vault (old pack)');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.blobRef).toBeUndefined();
+      expect(r.blobOversized).toBeUndefined();
+    }
+  });
+
+  it('takes a media mime only from the allow-list, falling back to the pack extension or dropping the bytes', async () => {
+    const { blob } = await exportPersonaWithReport('p-v', {
+      memory: false,
+      artefacts: true,
+      images: true,
+    });
+    const parsed = await readPersonaPack(blob);
+    for (const art of parsed.payload.artefacts) {
+      // "Here" keeps its .mp3 entry, so the extension still says audio/mpeg.
+      if (art.title === 'Here') art.mime = 'text/html';
+      // "In the vault" claims to be video, which its .mp3 entry cannot back up.
+      if (art.title === 'In the vault') {
+        art.kind = 'video';
+        art.format = 'video';
+        art.mime = 'image/svg+xml';
+      }
+    }
+    const res = await importPersonaPack(await writePersonaPack(parsed.payload), 'Mime');
+    const db = getClientDataDb();
+    const chats = await db.chats.where('personaId').equals(res.personaId).toArray();
+    const rows = await db.artefacts
+      .where('chatId')
+      .equals(chats[0]?.id ?? '')
+      .toArray();
+    const byTitle = new Map(rows.map((r) => [r.title, r]));
+    expect(byTitle.get('Here')?.mime).toBe('audio/mpeg');
+    expect(byTitle.get('Here')?.blob?.type).toBe('audio/mpeg');
+    expect(byTitle.get('In the vault')?.blob).toBeUndefined();
+    expect(byTitle.get('In the vault')?.mime).toBe('application/octet-stream');
   });
 });

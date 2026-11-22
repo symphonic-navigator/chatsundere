@@ -29,8 +29,29 @@ export interface PersonaPackPayload {
   artefacts: ArtefactRow[];
   checkpoints: CompactionCheckpointRow[];
   memory: { journal: MemoryJournalRow[]; bodies: MemoryBodyRow[] } | null;
+  /** Keyed by row id; a video artefact's poster goes under `<id>.thumb` (see {@link thumbBlobKey}). */
   blobs: Map<string, { bytes: Uint8Array; mime: string }>;
   included: { memory: boolean; artefacts: boolean; images: boolean };
+}
+
+/** The `blobs` key of an artefact's `thumbBlob`. Readers that predate it simply
+ *  never look it up, so the pack stays at the same transfer version. */
+export function thumbBlobKey(artefactId: string): string {
+  return `${artefactId}.thumb`;
+}
+
+/**
+ * The vault bookkeeping of a row: refs into the source account's blob store and
+ * its oversize sentinels. None of it may travel, or an imported row would point
+ * at blobs the importing account cannot open.
+ */
+const VAULT_FIELDS = ['blobRef', 'thumbBlobRef', 'blobOversized', 'thumbBlobOversized'] as const;
+
+/** A copy of `row` without its vault bookkeeping (see {@link VAULT_FIELDS}). */
+export function withoutVaultFields<T extends object>(row: T): T {
+  const copy = { ...row } as Record<string, unknown>;
+  for (const f of VAULT_FIELDS) delete copy[f];
+  return copy as T;
 }
 
 const enc = new TextEncoder();
@@ -39,7 +60,40 @@ function json(value: unknown): Uint8Array {
   return enc.encode(JSON.stringify(value));
 }
 
+/** Audio and video travel under their own extension. Some extensions are shared by
+ *  two mimes (`.webm`, `.mp4`), so the importer takes a media file's mime from its
+ *  artefact row, never from the extension alone. */
+const MEDIA_EXT: Readonly<Record<string, string>> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'opus',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/webm': 'weba',
+  'audio/flac': 'flac',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
+const MEDIA_MIME: Readonly<Record<string, string>> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+  flac: 'audio/flac',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+};
+
 function extFor(mime: string): string {
+  const media = MEDIA_EXT[mime];
+  if (media) return media;
   if (mime.includes('png')) return 'png';
   if (mime.includes('webp')) return 'webp';
   if (mime.includes('gif')) return 'gif';
@@ -105,6 +159,8 @@ function parseJson<T>(files: Map<string, Uint8Array>, name: string, fallback: T)
 }
 
 function mimeFromExt(name: string): string {
+  const media = MEDIA_MIME[name.slice(name.lastIndexOf('.') + 1)];
+  if (media) return media;
   if (name.endsWith('.png')) return 'image/png';
   if (name.endsWith('.webp')) return 'image/webp';
   if (name.endsWith('.gif')) return 'image/gif';

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { getProxyAuthSource, isOpaqueRedirect } from '@chatsundere/llm-unified';
+import type { McpRawResult } from './media-extract.js';
 import { isProxyUnauthorised } from './oauth/oauth-fetch.js';
 import { type ParsedChallenge, parseBearerChallenge } from './oauth/www-authenticate.js';
 import { MCP_PROTOCOL_VERSION } from './protocol.js';
@@ -308,6 +309,8 @@ export interface McpCallResult {
   scope?: string;
   /** Set when the server answered with a redirect, which is never followed. */
   redirect?: true;
+  /** The unfiltered result, so media blocks survive; set on success and on `isError` results. */
+  raw?: McpRawResult;
 }
 
 function authResult(
@@ -410,12 +413,18 @@ export async function mcpToolsCall(
 
   const result = (body.result ?? {}) as {
     isError?: boolean;
-    content?: Array<{ type: string; text?: string }>;
+    content?: unknown[];
+    structuredContent?: unknown;
   };
-  const text = (result.content ?? [])
-    .filter((c) => c.type === 'text')
-    .map((c) => c.text ?? '')
+  const content = Array.isArray(result.content) ? result.content : [];
+  const text = content
+    .filter(
+      (c): c is { type: 'text'; text?: string } =>
+        typeof c === 'object' && c !== null && (c as { type?: unknown }).type === 'text',
+    )
+    .map((c) => (typeof c.text === 'string' ? c.text : ''))
     .join('\n');
-  if (result.isError) return { stdout: '', error: text || 'Tool returned an error' };
-  return { stdout: text, error: null };
+  const raw: McpRawResult = { content, structuredContent: result.structuredContent };
+  if (result.isError) return { stdout: '', error: text || 'Tool returned an error', raw };
+  return { stdout: text, error: null, raw };
 }

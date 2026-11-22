@@ -61,6 +61,7 @@ import { clearLazyDraft, loadLazyDraft } from '../../../lib/cockpit-draft.js';
 import { isContextMessage } from '../../../lib/content-blocks.js';
 import { resolveContextWindow } from '../../../lib/context-window.js';
 import { noteChatOpened } from '../../../lib/history-return.js';
+import { useMediaFloorBridge } from '../../../lib/media/use-media-floor-bridge.js';
 import { reasoningStateFromChoice } from '../../../lib/reasoning-resolver.js';
 import { loadReplayAttachments } from '../../../lib/replay-pills.js';
 import { resolveOffering } from '../../../lib/resolve-offering.js';
@@ -826,6 +827,9 @@ export function ChatPage(): JSX.Element {
     sensitivity: settings.data?.dictationSensitivity ?? 'medium',
     redemptionMs: settings.data?.dictationRedemptionMs ?? REDEMPTION_MS_DEFAULT,
   });
+
+  // One sound at a time: read-aloud, monologue, live voice and chat players share a floor.
+  useMediaFloorBridge({ voice, monologue, live: liveVoice });
 
   const onEnterLiveVoice = useCallback(() => {
     setLiveVoice(true);

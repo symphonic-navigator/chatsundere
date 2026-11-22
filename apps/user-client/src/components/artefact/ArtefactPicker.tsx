@@ -8,6 +8,9 @@ import { type TreasuryType, applyTreasuryFilters } from '../../lib/treasury-filt
 import { HistorySearchBar } from '../history/HistorySearchBar.js';
 import { TypeTabs } from '../treasury/TypeTabs.js';
 
+/** Why an audio or video row cannot be picked: no model input takes these files yet. */
+export const MEDIA_NOT_SENDABLE = "Audio and video can't be sent to a model yet.";
+
 interface Props {
   chatId: string;
   onClose: () => void;
@@ -98,18 +101,33 @@ export function ArtefactPicker(p: Props): JSX.Element {
             {filtered.map((r) => {
               const g = formatGlyph(r.format);
               const on = selected.has(r.id);
+              // Shown, not hidden, so the Treasury reads the same here; greyed out with the reason.
+              const unsendable = r.kind === 'audio' || r.kind === 'video';
               return (
-                <li key={r.id} className="artefact-picker-row" data-selected={on || undefined}>
+                <li
+                  key={r.id}
+                  className="artefact-picker-row"
+                  data-selected={on || undefined}
+                  data-disabled={unsendable || undefined}
+                >
                   <button
                     type="button"
                     className="artefact-picker-row-body"
                     aria-pressed={on}
-                    onClick={() => toggle(r.id)}
+                    aria-disabled={unsendable || undefined}
+                    onClick={() => {
+                      if (!unsendable) toggle(r.id);
+                    }}
                   >
                     <span className={`artefact-glyph ${g.cls}`} aria-hidden>
                       {g.glyph}
                     </span>
-                    <span className="artefact-picker-row-title">{r.title}</span>
+                    <span className="artefact-picker-row-text">
+                      <span className="artefact-picker-row-title">{r.title}</span>
+                      {unsendable ? (
+                        <span className="artefact-picker-row-reason">{MEDIA_NOT_SENDABLE}</span>
+                      ) : null}
+                    </span>
                     <span className="artefact-picker-row-chip">{r.format.toUpperCase()}</span>
                     <span className="artefact-picker-check" data-on={on || undefined} aria-hidden>
                       {on ? '✓' : ''}

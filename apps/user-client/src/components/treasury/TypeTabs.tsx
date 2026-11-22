@@ -12,12 +12,13 @@ const TABS: { value: TreasuryType; label: string }[] = [
   { value: 'doc', label: 'Docs' },
   { value: 'code', label: 'Code' },
   { value: 'image', label: 'Images' },
+  { value: 'media', label: 'Audio & video' },
 ];
 
 /** Segmented type filter for the Treasury (and the attach picker). */
 export function TypeTabs({ value, onChange }: Props): JSX.Element {
   return (
-    <div className="cs-segmented" role="tablist">
+    <div className="cs-segmented cs-segmented-fit" role="tablist">
       {TABS.map((t) => (
         <button
           key={t.value}
