@@ -8,6 +8,27 @@ This file is the lean orientation surface — *read first, update last* (CLAUDE.
 
 ## Current
 
+**Last updated:** 2026-11-22 — **0.6.0 UNIT 1, MCP AUDIO AND VIDEO, ON `master`; DEVICE TESTS
+OPEN.** PR #69 squashed as `1c7fb36`. MCP tools that make audio or video (ElevenLabs first,
+Higgsfield later) show native players in the tool card: stacked audio rows, inline video tiles.
+The bytes are saved as `audio`/`video` artefacts as soon as the result arrives, because the
+servers' signed links expire within hours. Spec `superpowers/specs/2026-11-21-mcp-media-playback-design.md`,
+[ADR 0043](decisions/0043-native-players-for-mcp-media.md) (native players, no MCP Apps).
+- **Release line:** [ADR 0042](decisions/0042-release-0.6-from-master-before-eidolon.md)
+  supersedes ADR 0041. 0.6.0 builds on `master`; `maintenance/0.5` is cut from `master` at the
+  cut-over (`version.txt` 0.5.1), then `master` moves to 0.6.0. Eidolon comes late Dec 2026 /
+  early Jan 2027, after it is extracted during the Kumbu² work.
+- **Still open:** Chris's device test of the spec's "Manual verification" (8 steps; step 2 is
+  "take number 2"), after the Kumbu² 0.6.0 release. The ElevenLabs CDN's CORS headers are
+  unverified (the proxy fallback covers a failing direct fetch). Parked minors are in
+  `obsidian/insights/ux-deferrals.md` (2026-11-21).
+- **Later units:** the storage-limits talk before media go further in the Treasury, MCP `image`
+  blocks, the polling merge.
+
+**Next:** the device tests on #69; anything they find is fixed on `master` before 0.6.0.
+
+---
+
 **Last updated:** 2026-11-18 (night) — **v0.5.0 RELEASED.** `v0.5.0` on `880c604a` (the squash of
 release PR #67). Chris asked for it after a `pnpm dev` round, before the per-spec device tests on
 the phones. `CHANGELOG.md` has the 0.5.0 section, written from the Kumbu² diary.
